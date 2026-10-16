@@ -12,10 +12,21 @@
    ```bash
    cd EduPilot
    ```
-2. Start PostgreSQL via Docker:
-   ```bash
-   docker-compose up db -d
-   ```
+2. Set up PostgreSQL:
+   - **Option A (Docker)**:
+     ```bash
+     docker-compose up db -d
+     ```
+   - **Option B (Local PostgreSQL & pgAdmin)**:
+     - Ensure PostgreSQL service is running (default port `5432`).
+     - In pgAdmin or `psql`, create the project database:
+       ```sql
+       CREATE DATABASE edupilot;
+       ```
+     - Update `backend/.env` with your PostgreSQL username and password:
+       ```env
+       DATABASE_URL="postgresql+asyncpg://<username>:<password>@localhost:5432/edupilot"
+       ```
 3. Set up Backend:
    ```bash
    cd backend
@@ -23,7 +34,14 @@
    .\venv\Scripts\activate   # Windows
    pip install -r requirements.txt
    cp .env.example .env
+
+   # Run database migrations
+   alembic upgrade head
+
+   # Seed synthetic development data (idempotent)
    python -m scripts.seed_data
+
+   # Start backend API server
    uvicorn app.main:app --reload --port 8000
    ```
 4. Set up Frontend:

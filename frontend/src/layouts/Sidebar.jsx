@@ -13,23 +13,35 @@ import {
   ShieldCheck,
   GraduationCap,
 } from 'lucide-react';
+import { getNavItems } from '../utils/rbac';
 
-const NAV_ITEMS = [
-  { name: 'Dashboard', path: '/dashboard', icon: LayoutDashboard },
-  { name: 'Students', path: '/students', icon: Users },
-  { name: 'Courses', path: '/courses', icon: BookOpen },
-  { name: 'Batches', path: '/batches', icon: CalendarDays },
-  { name: 'Trainers', path: '/trainers', icon: UserCheck },
-  { name: 'Attendance', path: '/attendance', icon: ClipboardCheck },
-  { name: 'Fees & Invoicing', path: '/fees', icon: CreditCard, roleRestricted: true },
-  { name: 'AI Copilot', path: '/copilot', icon: Bot, badge: 'AI' },
-  { name: 'Action Approvals', path: '/approvals', icon: CheckSquare },
-  { name: 'Audit History', path: '/audit', icon: ShieldCheck, roleRestricted: true },
-];
+// Map icon name strings (from rbac.js) to Lucide components.
+const ICON_MAP = {
+  LayoutDashboard,
+  Users,
+  BookOpen,
+  CalendarDays,
+  UserCheck,
+  ClipboardCheck,
+  CreditCard,
+  Bot,
+  CheckSquare,
+  ShieldCheck,
+};
+
+/** Role label displayed in the sidebar header. */
+const ROLE_LABEL = {
+  super_admin: 'Owner / Admin',
+  admin: 'Administrator',
+  counselor: 'Counselor',
+  coordinator: 'Coordinator',
+  trainer: 'Trainer',
+  finance: 'Accounts',
+  student: 'Student Portal',
+};
 
 export function Sidebar({ userRole = 'super_admin' }) {
-  // Client-side visual filter (backend independently enforces authorization)
-  const isFinanceRestricted = userRole === 'trainer';
+  const navItems = getNavItems(userRole);
 
   return (
     <aside className="w-64 bg-slate-900 border-r border-slate-800 flex flex-col shrink-0 select-none">
@@ -41,7 +53,7 @@ export function Sidebar({ userRole = 'super_admin' }) {
         <div>
           <span className="text-base font-bold text-white tracking-tight">EduPilot</span>
           <span className="block text-[10px] text-indigo-400 font-medium uppercase tracking-wider">
-            Operations & AI
+            {ROLE_LABEL[userRole] ?? 'Operations & AI'}
           </span>
         </div>
       </div>
@@ -49,13 +61,10 @@ export function Sidebar({ userRole = 'super_admin' }) {
       {/* Nav List */}
       <div className="flex-1 px-3 py-4 space-y-1 overflow-y-auto">
         <div className="px-3 pb-2 text-[10px] font-semibold text-slate-400 uppercase tracking-wider">
-          Management
+          {userRole === 'student' ? 'My Portal' : 'Management'}
         </div>
-        {NAV_ITEMS.map((item) => {
-          if (item.roleRestricted && isFinanceRestricted) {
-            return null;
-          }
-          const Icon = item.icon;
+        {navItems.map((item) => {
+          const Icon = ICON_MAP[item.iconName] ?? LayoutDashboard;
           return (
             <NavLink
               key={item.path}

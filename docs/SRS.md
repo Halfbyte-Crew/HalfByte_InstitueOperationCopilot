@@ -10,18 +10,23 @@ This document defines functional and non-functional requirements for the EduPilo
 - **FR-AUTH-2**: The system must enforce Role-Based Access Control (RBAC) across roles: `super_admin`, `admin`, `coordinator`, `finance`, `trainer`.
 - **FR-AUTH-3**: The system must strictly reject access to fee endpoints if the authenticated user does not have `super_admin`, `admin`, or `finance` roles.
 
-### 2.2 Student & Course Management
-- **FR-STU-1**: CRUD operations for student profiles including contact info, enrollment date, and status.
-- **FR-STU-2**: CRUD operations for courses, curricula, and batch assignments.
-- **FR-STU-3**: Student filtering by status, batch, course, and enrollment date range.
+### 2.2 Student, Course & Batch Management [IMPLEMENTED - Sprint 2]
+- **FR-STU-1**: Relational CRUD operations for student profiles (`Student` model, `POST/GET/PATCH /api/v1/students`).
+- **FR-STU-2**: Course and curriculum management with unique codes and duration tracking (`POST/GET/PATCH /api/v1/courses`).
+- **FR-STU-3**: Trainer faculty directory and specialization management (`POST/GET/PATCH /api/v1/trainers`).
+- **FR-STU-4**: Cohort batch management linked to courses and trainers (`POST/GET/PATCH /api/v1/batches`).
+- **FR-STU-5**: Batch enrollment tracking with many-to-many relationship and unique student-batch constraint (`POST/GET /api/v1/batches/{batch_id}/enrollments`).
 
-### 2.3 Attendance Tracking
-- **FR-ATT-1**: Mark session attendance per batch (Present, Absent, Late, Excused).
-- **FR-ATT-2**: Compute aggregate attendance percentages per student and highlight at-risk individuals (<75%).
+### 2.3 Attendance Tracking [IMPLEMENTED - Sprint 2]
+- **FR-ATT-1**: Mark session attendance per batch with statuses: Present, Absent, Late, Excused (`POST /api/v1/attendance`).
+- **FR-ATT-2**: Enforce uniqueness constraint preventing duplicate attendance for the same student, batch, and session date (`uq_student_batch_session_date`).
+- **FR-ATT-3**: Batch attendance summary reporting active enrollment and daily attendance rates (`GET /api/v1/attendance/summary`).
 
-### 2.4 Fee Management (Secured)
-- **FR-FEE-1**: Record fee installments, due dates, payments, and receipts.
-- **FR-FEE-2**: Never return fee-related schema attributes or calculations in endpoints accessible to `trainer` or non-authorized roles.
+### 2.4 Fee Management (Secured) [IMPLEMENTED - Sprint 2]
+- **FR-FEE-1**: Record fee installments with decimal-safe financial amounts, explicit due dates, and receipts (`POST/GET /api/v1/fees`).
+- **FR-FEE-2**: Partial and full payment tracking with overpayment constraint validation (`POST /api/v1/fees/{id}/payments`).
+- **FR-FEE-3**: Aggregated fee collection velocity overview (`GET /api/v1/fees/overview`).
+- **FR-FEE-4**: Strict RBAC boundary requiring `super_admin`, `admin`, or `finance` roles, rejecting unauthorized roles.
 
 ### 2.5 AI Operations Copilot
 - **FR-COP-1**: Process natural language inquiries regarding institute metrics via backend FastAPI copilot service.
