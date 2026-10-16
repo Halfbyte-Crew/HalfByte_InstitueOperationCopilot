@@ -1,5 +1,6 @@
-from typing import List, Union
-from pydantic import AnyHttpUrl, validator
+import json
+from typing import List
+from pydantic import field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -18,7 +19,34 @@ class Settings(BaseSettings):
     BACKEND_CORS_ORIGINS: List[str] = [
         "http://localhost:5173",
         "http://127.0.0.1:5173",
+        "http://localhost:3000",
+        "http://127.0.0.1:3000",
     ]
+
+    @field_validator("BACKEND_CORS_ORIGINS", mode="before")
+    @classmethod
+    def parse_cors_origins(cls, v):
+        """
+        Accept any of:
+          - A Python list (already parsed)           → ["http://..."]
+          - A JSON array string from .env            → '["http://..."]'
+          - A comma-separated string from .env       → 'http://..., http://...'
+        Always falls back to localhost dev origins on any parse error.
+        """
+        if isinstance(v, list):
+            return v
+        if isinstance(v, str):
+            v = v.strip()
+            if v.startswith("["):
+                try:
+                    parsed = json.loads(v)
+                    if isinstance(parsed, list):
+                        return [o.strip() for o in parsed if o.strip()]
+                except json.JSONDecodeError:
+                    pass
+            # Comma-separated fallback
+            return [o.strip() for o in v.split(",") if o.strip()]
+        return ["http://localhost:5173", "http://127.0.0.1:5173"]
 
     model_config = SettingsConfigDict(
         env_file=".env",

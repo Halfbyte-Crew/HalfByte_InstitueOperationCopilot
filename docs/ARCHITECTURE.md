@@ -36,7 +36,14 @@ graph TD
 
 ## 3. Backend Architecture
 - **Dependency Injection**: FastAPI `Depends()` for database session management, token decoding, and role evaluation.
-- **Repository Pattern**: Clean separation between SQLAlchemy queries and business domain rules.
+- **Database & Persistence Layer (`app/database/` & `app/models/`)**:
+  - `base.py`: Central `DeclarativeBase` alongside reusable mixins (`TimestampMixin` for UTC auditing, `UUIDPrimaryKeyMixin`).
+  - `session.py`: Async engine configuration with connection pooling (`create_async_engine`), `AsyncSessionLocal` sessionmaker, and `check_db_connection()` health probe.
+  - `utils.py`: Database bootstrap helpers (`init_db`, `test_connection`, `get_database_version`).
+  - `models/institute.py`: Core domain models (`Student`, `Trainer`, `Course`, `Batch`, `BatchEnrollment`, `AttendanceRecord`, `FeeInstallment`) with explicit enums, decimal-safe amounts, check constraints, and unique indexes.
+  - `migrations/`: Versioned asynchronous schema migrations powered by Alembic (`alembic upgrade head`).
+- **Data Validation & Schemas (`app/schemas/institute.py`)**: Dedicated Pydantic v2 schemas decoupling persistence entities from presentation payloads.
+- **Repository & Endpoint Pattern**: Parameterized async SQLAlchemy queries across modular route controllers (`students`, `courses`, `trainers`, `batches`, `attendance`, `fees`).
 - **Exception Handling**: Global exception handlers transforming domain exceptions into uniform RFC-7807 JSON error responses.
 
 ## 4. Security Architecture

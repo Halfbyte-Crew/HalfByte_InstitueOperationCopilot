@@ -5,44 +5,55 @@ Development is strictly managed through phased execution. No phase may commence 
 
 ---
 
-### Phase 1: Project Scaffolding & Foundation (Current Phase)
+### Phase 1: Project Scaffolding & Foundation [COMPLETED]
 - [x] Establish canonical repository layout (`docs/`, `frontend/`, `backend/`, configuration files).
 - [x] Define documentation suite (`PRD`, `SRS`, `ARCHITECTURE`, `UI_UX`, `DEVELOPMENT`, `SECURITY`, `RULES`, `PHASES`, `MEMORY`).
 - [x] Configure frontend tooling (Vite, React 18, Tailwind CSS, PostCSS, ESLint, React Router).
 - [x] Set up base shared UI design system (`Button`, `Input`, `Modal`, `Table`, `Badge`, `Loader`, `PageHeader`, `EmptyState`, etc.).
 - [x] Configure backend architecture (FastAPI entrypoint, database session management, core config, security, exceptions).
 - [x] Establish Docker Compose orchestration for local development.
+- [x] Establish asynchronous Alembic migration framework (`alembic upgrade head`).
 
 ---
 
-### Phase 2: Authentication, Authorization & App Shell
+### Phase 2: Authentication, Authorization & App Shell [IN PROGRESS]
 - [ ] User authentication (Login, Token Refresh, Logout).
-- [ ] Role-Based Access Control (RBAC) middleware and route guards (`ProtectedLayout`).
+- [x] Role-Based Access Control (RBAC) route dependencies (`require_roles`).
 - [ ] Core layout scaffolding: `Sidebar`, `Navbar`, user profile dropdown, responsive mobile drawer.
 - [ ] Unit and integration tests for auth workflows.
 
 ---
 
-### Phase 3: Core Operational Domains (Students, Courses, Batches, Trainers)
-- [ ] Student management module (directory, profile view, enrollment, filtering).
-- [ ] Course and curriculum catalog.
-- [ ] Batch scheduling and trainer assignments.
-- [ ] Automated seed script with realistic dummy data.
+### Phase 2: Core Data Layer, Institute Management APIs & Frontend Integration [COMPLETED - Sprint 2]
+- [x] Database configuration & async SQLAlchemy connection pooling with health probing.
+- [x] Relational domain models (Student, Trainer, Course, Batch, BatchEnrollment, AttendanceRecord, FeeInstallment).
+- [x] Alembic versioned migrations with async support (`alembic upgrade head`).
+- [x] Automated repeatable seed script (`python -m scripts.seed_data`).
+- [x] Institute management REST APIs with Pydantic v2 validation (Students, Courses, Batches, Trainers, Attendance, Fees).
+- [x] CORS middleware origin handling and preflight support.
+- [x] Shared frontend hooks (`useApi`, `useMutation`) with error/loading state handling.
+- [x] Feature API client modules (`studentsApi`, `coursesApi`, `batchesApi`, `trainersApi`, `feesApi`).
+- [x] Frontend feature pages live-wired to backend APIs (`StudentsPage`, `CoursesPage`, `BatchesPage`, `TrainersPage`, `FeesPage`).
+- [x] Integration test suite for institute core operations passing (4/4 passed).
 
 ---
 
-### Phase 4: Attendance Tracking & Operational Health
-- [ ] Daily batch attendance roster UI.
-- [ ] Single-click attendance marking (Present/Absent/Late/Excused).
-- [ ] Attendance analytics and low-attendance alert triggers.
+### Phase 3: Attendance Tracking UI & Operational Health Analytics
+- [x] Attendance backend record persistence with duplicate prevention constraint.
+- [x] Aggregate batch attendance summary endpoint (`/attendance/summary`).
+- [ ] Daily batch attendance roster UI and student check-in modal.
+- [ ] Frontend attendance rate analytics, low attendance warning badges, and alert triggers.
 
 ---
 
-### Phase 5: Restricted Fee & Payment Management
-- [ ] Fee structure definition per course/batch.
-- [ ] Installment tracking and payment receipt generation.
-- [ ] Overdue dues reporting.
-- [ ] RBAC enforcement: verify non-finance / trainer roles receive 403 Forbidden and zero leaked data.
+### Phase 4: Fee & Payment Management Enhancements & Advanced Financials
+- [x] Fee structure and installment tracking with Decimal precision.
+- [x] Partial and full payment reconciliation (`/fees/{id}/payments`).
+- [x] Overdue and collection rate overview endpoint (`/fees/overview`).
+- [x] RBAC enforcement: verify non-finance / trainer roles receive 403 Forbidden.
+- [x] Frontend fee overview stats and record payment modal.
+- [ ] Exportable fee receipts and payment invoices (PDF/CSV).
+- [ ] Automated payment reminders and ledger auditing.
 
 ---
 

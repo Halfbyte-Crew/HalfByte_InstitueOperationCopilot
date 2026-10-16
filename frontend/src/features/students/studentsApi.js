@@ -19,7 +19,7 @@ export const studentsApi = {
 
   updateStudent: async (id, studentData) => {
     return apiClient(`/students/${id}`, {
-      method: 'PUT',
+      method: 'PATCH',
       body: studentData,
     });
   },
