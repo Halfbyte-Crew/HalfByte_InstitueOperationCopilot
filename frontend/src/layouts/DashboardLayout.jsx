@@ -9,7 +9,7 @@ export function DashboardLayout() {
 
   return (
     <div className="flex h-screen w-screen overflow-hidden bg-slate-50">
-      {/* Sidebar */}
+      {/* Sidebar — receives the authenticated role to build role-specific nav */}
       <Sidebar userRole={user?.role} />
 
       {/* Main Content Area */}

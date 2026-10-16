@@ -46,16 +46,53 @@
   - Added custom `@field_validator("BACKEND_CORS_ORIGINS", mode="before")` in `config.py` to parse both JSON strings and comma-separated lists from `.env`.
   - Configured CORSMiddleware to always register with validated origin list, eliminating 400 Bad Request on preflight OPTIONS requests.
 
+- **ADR-010: Role-Based Dashboard Architecture (Sprint 3)**
+  - Five role-specific dashboard pages under `/dashboard/{role}` routes.
+  - Shared `DashboardLayout` + `Sidebar` + `Navbar` used by all roles — no duplicated shell.
+  - `RoleGuard.jsx` wraps each dashboard route; wrong-role users are redirected to their own dashboard (not an error page).
+  - Role constants, dashboard URL map, and nav item config live in `src/utils/rbac.js` — single source of truth.
+  - `AuthProvider` re-validates the JWT with `GET /auth/me` on every page load to prevent stale roles from localStorage being trusted.
+  - `DashboardLayout` passes `user.role` to `Sidebar`, which uses `getNavItems(role)` from `rbac.js` for role-specific navigation.
+
+- **ADR-011: Backend Role-Scoped Dashboard Endpoints**
+  - New module `backend/app/modules/dashboard/router.py` with five endpoints scoped by role.
+  - Financial data is completely absent from trainer and student endpoints (schema-level segregation, not just response filtering).
+  - `require_roles()` dependency enforces RBAC independently at every endpoint.
+
 ## 2. Current Project State
-- **Sprint 2 / Phase 2 (Core Institute Layer & Frontend Integration) Completed**:
-  - Full relational PostgreSQL schema and Alembic migrations.
-  - Core domain APIs (Students, Courses, Batches, Trainers, Attendance, Fees) operational with Pydantic schemas.
-  - Live frontend integration complete for Students, Courses, Batches, Trainers, and Fees pages.
-  - CORS preflight issue completely resolved.
-  - Database seed script (`python -m scripts.seed_data`) creates realistic demo records.
-  - Automated Tests: 4/4 integration tests passing in `tests/integration/test_institute_core.py`.
-  - Frontend Build: `npm run build` passes with zero errors.
+
+- **Sprint 3 / Phase 3 (Role-Based Dashboards & Frontend Routing) Completed**:
+  - Five role-specific dashboards implemented: Owner, Counselor, Trainer, Accounts, Student.
+  - All dashboards use shared `DashboardLayout` + role-aware `Sidebar`.
+  - `RoleGuard` protects each dashboard route; unauthenticated → `/login`, wrong role → own dashboard.
+  - Login page updated to call real backend (`POST /auth/login`) and redirect to `getDashboardPath(role)`.
+  - `AuthProvider` validates token on mount via `GET /auth/me`, protecting page refreshes.
+  - Five new backend dashboard endpoints added (`/dashboard/{owner|counselor|trainer|accounts|student}`).
+  - Trainer endpoint has zero financial fields — enforced at schema level.
+  - Demo credential matrix in auth router enables testing all 5 roles with `admin123`.
+  - **Frontend Build**: `npm run build` passes — 1515 modules, exit code 0.
+  - **Backend Tests**: 4/4 existing integration tests passing.
+  - **Backend Import Check**: New modules import cleanly.
+
+- **Demo Credentials (Phase 3 scaffolding)**:
+  | Email | Role |
+  |---|---|
+  | `owner@edupilot.io` | `super_admin` |
+  | `counselor@edupilot.io` | `counselor` |
+  | `trainer@edupilot.io` | `trainer` |
+  | `accounts@edupilot.io` | `finance` |
+  | `student@edupilot.io` | `student` |
+  | Password for all: `admin123` |
+
+- **Known Limitations / Next Phase**:
+  - Demo credential matrix must be replaced with a real `User` database table, password hashing, and JWT refresh tokens in Phase 4.
+  - Student dashboard cannot link to personal attendance/fee records until a `User → Student` FK relationship is added in Phase 4.
+  - Counselor follow-up tasks are demo data — requires CRM integration in Phase 4.
+  - Trainer class schedule is demo data — requires timetable module in Phase 4.
+  - AI Copilot alerts on owner dashboard are demo data — requires Phase 4 LLM integration.
+
 - **Exact Next Recommended Task**:
-  - Phase 3 / Auth: Full user authentication (JWT login/refresh/logout screens and backend tokens).
-  - Attendance daily roster marking UI.
-  - Fee receipts / invoice exports.
+  - Phase 4 / Auth: Implement `User` model with hashed passwords, JWT refresh tokens, and user-to-role-entity mapping.
+  - Phase 4 / Student linking: Add `user_id` FK to `Student` model and filter student dashboard by authenticated user.
+  - Attendance daily roster marking UI (Trainer → mark batch attendance).
+  - Fee receipts / invoice exports (Accounts dashboard).
