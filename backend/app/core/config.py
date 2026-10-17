@@ -16,6 +16,14 @@ class Settings(BaseSettings):
     OPENAI_API_KEY: str = ""
     OPENAI_MODEL: str = "gpt-4o"
 
+    # Ollama / Local Embedding Settings
+    OLLAMA_BASE_URL: str = "http://localhost:11434"
+    OLLAMA_EMBEDDING_MODEL: str = "qwen3-embedding:4b"
+
+    # RAG Retrieval Settings
+    RAG_SIMILARITY_THRESHOLD: float = 0.40
+    RAG_TOP_K: int = 4
+
     BACKEND_CORS_ORIGINS: List[str] = [
         "http://localhost:5173",
         "http://127.0.0.1:5173",
