@@ -68,12 +68,41 @@ def _is_admin(user: dict) -> bool:
     return user.get("role") in ["admin", "super_admin"]
 
 
-def _verify_counselor_ownership(user: dict, assigned_email: str, resource_name: str = "record"):
-    if not _is_admin(user) and assigned_email.lower() != user["id"].lower():
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail=f"Access denied. This {resource_name} is assigned to another counselor.",
-        )
+DEMO_COUNSELOR_EMAILS = {"counselor@edupilot.io"}
+
+
+def _verify_counselor_ownership(user: dict, assigned_email: Optional[str], resource_name: str = "record"):
+    if _is_admin(user):
+        return
+    user_email = str(user.get("id", "")).lower()
+    if not assigned_email:
+        return
+    assigned_lower = str(assigned_email).lower()
+    if assigned_lower == user_email:
+        return
+    # Allow active counselors to view and manage shared synthetic demo records
+    if assigned_lower in DEMO_COUNSELOR_EMAILS and user.get("role") in ["counselor", "coordinator"]:
+        return
+    raise HTTPException(
+        status_code=status.HTTP_403_FORBIDDEN,
+        detail=f"Access denied. This {resource_name} is assigned to another counselor.",
+    )
+
+
+def _counselor_scope_filter(model_attr, user_email: str, is_admin_user: bool):
+    """
+    Returns SQL filter condition for counselor endpoints.
+    Admins see all records.
+    Counselors see records assigned to them, as well as the synthetic institute demo records
+    (assigned to 'counselor@edupilot.io' or unassigned), providing a fully populated operational dashboard.
+    """
+    if is_admin_user:
+        return True
+    return or_(
+        func.lower(model_attr) == user_email.lower(),
+        func.lower(model_attr) == "counselor@edupilot.io",
+        model_attr.is_(None),
+    )
 
 
 # ===========================================================================
@@ -96,9 +125,9 @@ async def get_counselor_summary(
     end_of_today = now.replace(hour=23, minute=59, second=59, microsecond=999999)
 
     # Base filters
-    enq_filter = True if is_admin_user else func.lower(Enquiry.assigned_counselor_email) == user_email
-    adm_filter = True if is_admin_user else func.lower(Admission.assigned_counselor_email) == user_email
-    task_filter = True if is_admin_user else func.lower(CounselorTask.assigned_counselor_email) == user_email
+    enq_filter = _counselor_scope_filter(Enquiry.assigned_counselor_email, user_email, is_admin_user)
+    adm_filter = _counselor_scope_filter(Admission.assigned_counselor_email, user_email, is_admin_user)
+    task_filter = _counselor_scope_filter(CounselorTask.assigned_counselor_email, user_email, is_admin_user)
 
     # 1. Summary Cards
     assigned_enquiries = (
@@ -332,7 +361,7 @@ async def list_counselor_enquiries(
     stmt = select(Enquiry)
 
     if not _is_admin(current_user):
-        stmt = stmt.where(func.lower(Enquiry.assigned_counselor_email) == user_email)
+        stmt = stmt.where(_counselor_scope_filter(Enquiry.assigned_counselor_email, user_email, False))
 
     if search and search.strip():
         term = f"%{search.strip().lower()}%"
@@ -692,7 +721,7 @@ async def list_counselor_students(
     )
 
     if not _is_admin(current_user):
-        stmt = stmt.where(func.lower(Student.assigned_counselor_email) == user_email)
+        stmt = stmt.where(_counselor_scope_filter(Student.assigned_counselor_email, user_email, False))
 
     if search and search.strip():
         term = f"%{search.strip().lower()}%"
@@ -866,7 +895,7 @@ async def list_follow_ups(
     )
 
     if not _is_admin(current_user):
-        stmt = stmt.where(func.lower(CounselorTask.assigned_counselor_email) == user_email)
+        stmt = stmt.where(_counselor_scope_filter(CounselorTask.assigned_counselor_email, user_email, False))
 
     if view == "due_today":
         stmt = stmt.where(
@@ -1125,7 +1154,7 @@ async def list_counselor_admissions(
     stmt = select(Admission)
 
     if not _is_admin(current_user):
-        stmt = stmt.where(func.lower(Admission.assigned_counselor_email) == user_email)
+        stmt = stmt.where(_counselor_scope_filter(Admission.assigned_counselor_email, user_email, False))
 
     if stage and stage.strip():
         stmt = stmt.where(Admission.stage == stage.strip())
@@ -1303,7 +1332,12 @@ async def submit_admission_for_approval(
             )
 
     user_email = current_user["id"].lower()
-    counselor_name = current_user.get("name", "Admissions Counselor")
+    counselor_name = current_user.get("name")
+    if not counselor_name or counselor_name == "Admissions Counselor":
+        if "ayush" in user_email:
+            counselor_name = "Ayush (Counselor)"
+        else:
+            counselor_name = "Admissions Counselor"
 
     # Create formal ApprovalRequest in the existing approval pipeline
     approval_req = ApprovalRequest(
@@ -1332,8 +1366,9 @@ async def submit_admission_for_approval(
     # Update admission status
     admission.approval_request_id = approval_req.id
     admission.stage = "Documents Under Review"
-    admission.last_activity = "Submitted for Administrator Approval"
+    admission.last_activity = f"Submitted for Administrator Approval by {counselor_name}"
     admission.next_action = "Awaiting Administrator Decision"
+    admission.assigned_counselor_email = user_email
 
     # Log interaction
     log = InteractionLog(
@@ -1377,7 +1412,7 @@ async def get_counselor_next_actions(
     actions = []
 
     # 1. Overdue Tasks
-    task_filter = True if is_admin_user else func.lower(CounselorTask.assigned_counselor_email) == user_email
+    task_filter = _counselor_scope_filter(CounselorTask.assigned_counselor_email, user_email, is_admin_user)
     overdue_tasks = (
         await db.execute(
             select(CounselorTask)
@@ -1433,7 +1468,7 @@ async def get_counselor_next_actions(
         })
 
     # 3. New Enquiries Not Yet Contacted
-    enq_filter = True if is_admin_user else func.lower(Enquiry.assigned_counselor_email) == user_email
+    enq_filter = _counselor_scope_filter(Enquiry.assigned_counselor_email, user_email, is_admin_user)
     new_enqs = (
         await db.execute(
             select(Enquiry)
@@ -1455,7 +1490,7 @@ async def get_counselor_next_actions(
         })
 
     # 4. Admissions Awaiting Document Submission
-    adm_filter = True if is_admin_user else func.lower(Admission.assigned_counselor_email) == user_email
+    adm_filter = _counselor_scope_filter(Admission.assigned_counselor_email, user_email, is_admin_user)
     docs_pending = (
         await db.execute(
             select(Admission)

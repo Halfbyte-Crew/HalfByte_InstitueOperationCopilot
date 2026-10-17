@@ -289,3 +289,82 @@ async def test_admission_stage_restrictions_and_admin_approval(
     assert res_final.status_code == 200
     assert res_final.json()["stage"] == "Admission Approved"
     assert res_final.json()["approval_status"] == "Approved"
+
+
+@pytest.mark.asyncio
+async def test_provisioned_counselor_dashboard_and_approval_workflow(
+    client: AsyncClient,
+    db_session: AsyncSession,
+):
+    """
+    Verifies that a newly provisioned counselor (e.g. ayush202@gmail.com) sees
+    institute synthetic operational data, active admission pipeline, and can
+    submit an admission approval request to the administrator.
+    """
+    ayush_user = {
+        "id": "ayush202@gmail.com",
+        "email": "ayush202@gmail.com",
+        "role": "counselor",
+        "name": "Ayush Counselor",
+    }
+    app.dependency_overrides[get_current_user] = lambda: ayush_user
+
+    # 1. Summary includes operational data
+    res_summary = await client.get("/api/v1/counselor/summary")
+    assert res_summary.status_code == 200
+    summary_data = res_summary.json()
+    assert "active_admissions" in summary_data
+    assert "pipeline_summary" in summary_data
+
+    # 2. Seed a demo admission with pending documents
+    demo_adm = Admission(
+        student_name="Devansh Roy",
+        student_email="devansh.roy@example.com",
+        course_title="Cloud & DevOps Engineering",
+        assigned_counselor_email="counselor@edupilot.io",
+        stage="Documents Pending",
+        application_date=date.today(),
+        documents_required=[
+            {"name": "Class 10th Certificate", "status": "Verified"},
+            {"name": "Government Photo ID", "status": "Verified"},
+        ],
+    )
+    db_session.add(demo_adm)
+    await db_session.commit()
+    await db_session.refresh(demo_adm)
+
+    # 3. Ayush lists admissions and sees Devansh
+    res_list = await client.get("/api/v1/counselor/admissions")
+    assert res_list.status_code == 200
+    adms = res_list.json()["items"]
+    devansh_entry = next((a for a in adms if a["id"] == str(demo_adm.id)), None)
+    assert devansh_entry is not None
+    assert devansh_entry["stage"] == "Documents Pending"
+    assert devansh_entry["approval_request_id"] is None
+
+    # 4. Ayush submits Devansh's application for Admin Approval
+    approval_payload = {"notes": "All identity and academic marksheets verified by Ayush."}
+    res_submit = await client.post(
+        f"/api/v1/counselor/admissions/{demo_adm.id}/submit-approval",
+        json=approval_payload,
+    )
+    assert res_submit.status_code == 200
+    submit_res = res_submit.json()
+    assert submit_res["stage"] == "Documents Under Review"
+    req_id = submit_res["approval_request_id"]
+
+    # 5. Admin reviews and approves the request
+    app.dependency_overrides[get_current_user] = lambda: {
+        "id": "admin@edupilot.io",
+        "email": "admin@edupilot.io",
+        "role": "admin",
+        "name": "Super Admin",
+    }
+    res_approve = await client.post(f"/api/v1/approvals/{req_id}/approve")
+    assert res_approve.status_code == 200
+
+    # 6. Ayush views updated admission status
+    app.dependency_overrides[get_current_user] = lambda: ayush_user
+    res_after = await client.get(f"/api/v1/counselor/admissions/{demo_adm.id}")
+    assert res_after.status_code == 200
+    assert res_after.json()["stage"] == "Admission Approved"
