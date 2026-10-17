@@ -65,10 +65,12 @@ export const NAV_CONFIG = {
   ],
 
   [ROLES.FINANCE]: [
-    { name: 'Dashboard', path: '/dashboard/accounts', iconName: 'LayoutDashboard' },
-    { name: 'Fees & Invoicing', path: '/fees', iconName: 'CreditCard' },
-    { name: 'Students', path: '/students', iconName: 'Users' },
-    { name: 'Batches', path: '/batches', iconName: 'CalendarDays' },
+    { name: 'Overview', path: '/dashboard/accounts', iconName: 'LayoutDashboard' },
+    { name: 'Fees & EMIs', path: '/dashboard/accounts?tab=fees', iconName: 'CreditCard' },
+    { name: 'Payment Records', path: '/dashboard/accounts?tab=payments', iconName: 'Receipt' },
+    { name: 'Reconciliation', path: '/dashboard/accounts?tab=reconciliation', iconName: 'CheckCircle' },
+    { name: 'Financial Reports', path: '/dashboard/accounts?tab=reports', iconName: 'FileText' },
+    { name: 'AI Knowledge Bot', path: '/copilot', iconName: 'Bot', badge: 'AI' },
   ],
 
   [ROLES.STUDENT]: [

@@ -13,12 +13,14 @@ from app.modules.dashboard.router import router as dashboard_router
 from app.modules.rag.router import router as rag_router
 from app.modules.staff.router import router as staff_router
 from app.modules.counselor.router import router as counselor_router
+from app.modules.finance.router import router as finance_router
 
 api_router = APIRouter()
 
 api_router.include_router(auth_router)
 api_router.include_router(dashboard_router)
 api_router.include_router(counselor_router)
+api_router.include_router(finance_router)
 api_router.include_router(staff_router)
 api_router.include_router(students_router)
 api_router.include_router(courses_router)

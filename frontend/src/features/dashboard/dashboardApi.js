@@ -61,7 +61,48 @@ export const getCounselorNextActions = () => apiClient('/counselor/next-actions'
 export const getTrainerSchedule = () => apiClient('/dashboard/trainer/schedule');
 
 // ── Accounts / Finance ─────────────────────────────────────────────────────
-export const getAccountsOverview = () => apiClient('/dashboard/accounts/overview');
+export const getFinanceOverview = (params) => apiClient('/finance/overview', { params });
+export const getAccountsOverview = getFinanceOverview;
+export const getFinanceFees = (params) => apiClient('/finance/fees', { params });
+export const getFinanceStudents = () => apiClient('/finance/students');
+export const getFinancePayments = (params) => apiClient('/finance/payments', { params });
+export const recordFinancePayment = (payload) =>
+  apiClient('/finance/payments', { method: 'POST', body: payload });
+export const getFinanceReceipt = (paymentId) => apiClient(`/finance/payments/${paymentId}/receipt`);
+export const getFinanceReconciliationSummary = () => apiClient('/finance/reconciliation/summary');
+export const reconcileFinancePayment = (paymentId) =>
+  apiClient(`/finance/reconciliation/${paymentId}/reconcile`, { method: 'POST' });
+export const flagFinanceDiscrepancy = (paymentId, payload) =>
+  apiClient(`/finance/reconciliation/${paymentId}/flag-discrepancy`, { method: 'POST', body: payload });
+export const getFinanceReport = (reportType, params) =>
+  apiClient(`/finance/reports/${reportType}`, { params });
+
+export const exportFinanceReportCsv = async (reportType, params = {}) => {
+  const query = new URLSearchParams(
+    Object.entries(params).filter(([_, v]) => v !== undefined && v !== null && v !== '')
+  ).toString();
+  const token = localStorage.getItem('access_token');
+  const BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000/api/v1';
+  const url = `${BASE_URL}/finance/reports/${reportType}/export${query ? `?${query}` : ''}`;
+  const resp = await fetch(url, {
+    headers: {
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    },
+  });
+  if (!resp.ok) {
+    const errorText = await resp.text();
+    throw new Error(errorText || 'Failed to download report CSV');
+  }
+  const blob = await resp.blob();
+  const downloadUrl = window.URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = downloadUrl;
+  a.download = `${reportType}_report.csv`;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  window.URL.revokeObjectURL(downloadUrl);
+};
 
 // ── Student ────────────────────────────────────────────────────────────────
 export const getStudentProfile = () => apiClient('/dashboard/student/profile');
@@ -113,8 +154,19 @@ export const dashboardApi = {
   getCounselorNextActions,
   // Trainer
   getTrainerSchedule,
-  // Accounts
+  // Accounts / Finance
   getAccountsOverview,
+  getFinanceOverview,
+  getFinanceFees,
+  getFinanceStudents,
+  getFinancePayments,
+  recordFinancePayment,
+  getFinanceReceipt,
+  getFinanceReconciliationSummary,
+  reconcileFinancePayment,
+  flagFinanceDiscrepancy,
+  getFinanceReport,
+  exportFinanceReportCsv,
   // Student
   getStudentProfile,
   // Legacy
