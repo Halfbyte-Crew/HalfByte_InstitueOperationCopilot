@@ -12,6 +12,10 @@ class Settings(BaseSettings):
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 60
     INSTITUTE_TIMEZONE: str = "Asia/Kolkata"
 
+    # Administrator Root Credentials (loaded from environment)
+    ADMIN_EMAIL: str = "admin@edupilot.io"
+    ADMIN_PASSWORD: str = "admin123"
+
     DATABASE_URL: str = "postgresql+asyncpg://edupilot_user:edupilot_password@localhost:5432/edupilot"
 
     OPENAI_API_KEY: str = ""

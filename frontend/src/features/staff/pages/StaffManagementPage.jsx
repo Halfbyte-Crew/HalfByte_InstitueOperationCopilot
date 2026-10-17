@@ -19,6 +19,10 @@ import {
   Building,
   CheckCircle2,
   AlertCircle,
+  KeyRound,
+  Eye,
+  EyeOff,
+  Lock,
 } from 'lucide-react';
 import { useApi, useMutation } from '../../../hooks';
 import { staffApi } from '../staffApi';
@@ -35,9 +39,10 @@ const ROLE_BADGE = {
 const EMPTY_STAFF = {
   name: '',
   email: '',
+  password: '',
   phone: '',
-  role: 'coordinator',
-  department: 'Academic Operations',
+  role: 'counselor',
+  department: 'Admissions & Counseling',
 };
 
 export function StaffManagementPage() {
@@ -49,8 +54,11 @@ export function StaffManagementPage() {
   // Modals
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [isEditOpen, setIsEditOpen] = useState(false);
+  const [isPasswordResetOpen, setIsPasswordResetOpen] = useState(false);
   const [selectedStaff, setSelectedStaff] = useState(null);
   const [formData, setFormData] = useState(EMPTY_STAFF);
+  const [resetPasswordValue, setResetPasswordValue] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const [formError, setFormError] = useState('');
   const [actionFeedback, setActionFeedback] = useState({ text: '', type: '' });
 
@@ -73,10 +81,14 @@ export function StaffManagementPage() {
   const { mutate: updateStaff, isLoading: isUpdating } = useMutation((payload) =>
     staffApi.updateStaff(payload.id, payload.data)
   );
+  const { mutate: resetStaffPassword, isLoading: isResetting } = useMutation((payload) =>
+    staffApi.resetStaffPassword(payload.id, payload.password)
+  );
   const { mutate: toggleStatus } = useMutation(staffApi.toggleStaffStatus);
 
   const handleOpenCreate = () => {
     setFormData(EMPTY_STAFF);
+    setShowPassword(false);
     setFormError('');
     setIsCreateOpen(true);
   };
@@ -86,20 +98,38 @@ export function StaffManagementPage() {
     setFormData({
       name: staff.name,
       email: staff.email,
+      password: '',
       phone: staff.phone || '',
       role: staff.role,
       department: staff.department || '',
     });
+    setShowPassword(false);
     setFormError('');
     setIsEditOpen(true);
+  };
+
+  const handleOpenResetPassword = (staff) => {
+    setSelectedStaff(staff);
+    setResetPasswordValue('');
+    setShowPassword(false);
+    setFormError('');
+    setIsPasswordResetOpen(true);
   };
 
   const handleCreateSubmit = async (e) => {
     e.preventDefault();
     setFormError('');
     try {
-      await createStaff(formData);
-      setActionFeedback({ text: `Staff account for '${formData.name}' created successfully.`, type: 'success' });
+      const payload = { ...formData };
+      if (!payload.password || payload.password.trim().length < 6) {
+        setFormError('Please enter a login password of at least 6 characters.');
+        return;
+      }
+      await createStaff(payload);
+      setActionFeedback({
+        text: `Staff credentials for '${formData.name}' created successfully (${formData.role.toUpperCase()}).`,
+        type: 'success',
+      });
       setIsCreateOpen(false);
       refresh();
     } catch (err) {
@@ -111,20 +141,47 @@ export function StaffManagementPage() {
     e.preventDefault();
     setFormError('');
     try {
+      const updateData = {
+        name: formData.name,
+        phone: formData.phone,
+        role: formData.role,
+        department: formData.department,
+      };
+      if (formData.password && formData.password.trim().length >= 6) {
+        updateData.password = formData.password.trim();
+      }
       await updateStaff({
         id: selectedStaff.id,
-        data: {
-          name: formData.name,
-          phone: formData.phone,
-          role: formData.role,
-          department: formData.department,
-        },
+        data: updateData,
       });
       setActionFeedback({ text: `Staff details for '${formData.name}' updated.`, type: 'success' });
       setIsEditOpen(false);
       refresh();
     } catch (err) {
       setFormError(err.message || 'Failed to update staff record.');
+    }
+  };
+
+  const handleResetPasswordSubmit = async (e) => {
+    e.preventDefault();
+    setFormError('');
+    if (!resetPasswordValue || resetPasswordValue.length < 6) {
+      setFormError('Password must be at least 6 characters.');
+      return;
+    }
+    try {
+      await resetStaffPassword({
+        id: selectedStaff.id,
+        password: resetPasswordValue,
+      });
+      setActionFeedback({
+        text: `Login credentials reset for '${selectedStaff.name}'.`,
+        type: 'success',
+      });
+      setIsPasswordResetOpen(false);
+      refresh();
+    } catch (err) {
+      setFormError(err.message || 'Failed to reset password.');
     }
   };
 
@@ -150,7 +207,7 @@ export function StaffManagementPage() {
     <div className="space-y-6">
       <PageHeader
         title="Staff & Faculty Management"
-        description="ADMIN-only directory: onboard staff, assign authorized roles, and manage institutional access."
+        description="ADMIN-only directory: create login credentials, assign operational roles, and manage institutional access."
         action={
           <div className="flex items-center gap-3">
             <Button variant="outline" size="sm" icon={RefreshCw} onClick={refresh}>
@@ -162,6 +219,14 @@ export function StaffManagementPage() {
           </div>
         }
       />
+
+      {/* Security boundary notice */}
+      <div className="flex items-center gap-2 px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-600 shadow-xs">
+        <Lock className="w-4 h-4 text-indigo-600 shrink-0" />
+        <span>
+          <strong>Credential Control:</strong> Admin creates and resets credentials for Counselor, Trainer, and Finance staff. Admin credentials are authenticated via environment configuration.
+        </span>
+      </div>
 
       {actionFeedback.text && (
         <div
@@ -199,27 +264,28 @@ export function StaffManagementPage() {
           </div>
 
           <div className="flex items-center gap-2 w-full sm:w-auto">
+            <Filter className="h-4 w-4 text-slate-400 shrink-0" />
             <select
               value={roleFilter}
               onChange={(e) => setRoleFilter(e.target.value)}
-              className="w-full sm:w-40 text-xs rounded-lg border border-slate-200 p-2 bg-white"
+              className="text-xs rounded-lg border border-slate-200 px-2.5 py-1.5 focus:outline-none focus:border-indigo-500 bg-white"
             >
               <option value="">All Roles</option>
               <option value="admin">Administrator</option>
               <option value="counselor">Counselor</option>
               <option value="coordinator">Coordinator</option>
-              <option value="trainer">Trainer</option>
-              <option value="finance">Finance</option>
+              <option value="trainer">Trainer / Faculty</option>
+              <option value="finance">Finance / Accounts</option>
             </select>
 
             <select
               value={statusFilter}
               onChange={(e) => setStatusFilter(e.target.value)}
-              className="w-full sm:w-36 text-xs rounded-lg border border-slate-200 p-2 bg-white"
+              className="text-xs rounded-lg border border-slate-200 px-2.5 py-1.5 focus:outline-none focus:border-indigo-500 bg-white"
             >
               <option value="">All Statuses</option>
-              <option value="active">Active</option>
-              <option value="inactive">Inactive</option>
+              <option value="active">Active Only</option>
+              <option value="inactive">Inactive Only</option>
             </select>
           </div>
         </div>
@@ -228,15 +294,14 @@ export function StaffManagementPage() {
       {/* Staff Table */}
       <div className="rounded-xl border border-slate-200 bg-white shadow-xs overflow-hidden">
         {isLoading ? (
-          <div className="p-6 space-y-3">
-            {[1, 2, 3, 4, 5].map((i) => (
-              <div key={i} className="h-12 bg-slate-100 rounded-lg animate-pulse" />
-            ))}
+          <div className="p-8 text-center text-slate-400 text-xs flex items-center justify-center gap-2">
+            <RefreshCw className="h-4 w-4 animate-spin text-indigo-600" />
+            Loading staff directory...
           </div>
         ) : staffList.length === 0 ? (
           <EmptyState
             icon={Users}
-            title="No Staff Members Found"
+            title="No staff members found"
             description="No directory records match your selected filters."
           />
         ) : (
@@ -247,7 +312,7 @@ export function StaffManagementPage() {
                   <th className="py-3 px-4">Staff Member</th>
                   <th className="py-3 px-4">Institutional Role</th>
                   <th className="py-3 px-4">Department</th>
-                  <th className="py-3 px-4">Contact Phone</th>
+                  <th className="py-3 px-4">Credentials</th>
                   <th className="py-3 px-4">Account Status</th>
                   <th className="py-3 px-4 text-right">Actions</th>
                 </tr>
@@ -290,8 +355,18 @@ export function StaffManagementPage() {
                       <td className="py-3 px-4 text-slate-600 font-medium">
                         {item.department || '—'}
                       </td>
-                      <td className="py-3 px-4 text-slate-600">
-                        {item.phone || '—'}
+                      <td className="py-3 px-4">
+                        {item.has_password ? (
+                          <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200">
+                            <KeyRound className="h-3 w-3 text-emerald-600" />
+                            Login Enabled
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-amber-700 bg-amber-50 px-2 py-0.5 rounded-full border border-amber-200">
+                            <KeyRound className="h-3 w-3 text-amber-600" />
+                            No Password
+                          </span>
+                        )}
                       </td>
                       <td className="py-3 px-4">
                         {item.is_active ? (
@@ -307,7 +382,15 @@ export function StaffManagementPage() {
                         )}
                       </td>
                       <td className="py-3 px-4 text-right">
-                        <div className="flex items-center justify-end gap-2">
+                        <div className="flex items-center justify-end gap-1.5">
+                          <button
+                            type="button"
+                            onClick={() => handleOpenResetPassword(item)}
+                            className="p-1.5 text-slate-500 hover:text-amber-600 hover:bg-amber-50 rounded transition-colors"
+                            title="Reset Login Password"
+                          >
+                            <KeyRound className="h-3.5 w-3.5" />
+                          </button>
                           <button
                             type="button"
                             onClick={() => handleOpenEdit(item)}
@@ -344,7 +427,7 @@ export function StaffManagementPage() {
         <Modal
           isOpen={true}
           onClose={() => setIsCreateOpen(false)}
-          title="Onboard New Staff Member"
+          title="Onboard Staff & Create Login Credentials"
         >
           <form onSubmit={handleCreateSubmit} className="space-y-3.5 text-xs">
             {formError && <ErrorMessage message={formError} />}
@@ -362,15 +445,40 @@ export function StaffManagementPage() {
             </div>
 
             <div>
-              <label className="block font-medium text-slate-700 mb-1">Institutional Email *</label>
+              <label className="block font-medium text-slate-700 mb-1">Institutional Email (Login ID) *</label>
               <input
                 type="email"
-                placeholder="e.g. ramesh.g@edupilot.io"
-                className="w-full rounded-lg border border-slate-300 p-2 bg-white"
+                placeholder="staff@edupilot.io"
+                className="w-full rounded-lg border border-slate-300 p-2 bg-white font-mono"
                 value={formData.email}
                 onChange={(e) => setFormData({ ...formData, email: e.target.value })}
                 required
               />
+            </div>
+
+            <div>
+              <label className="block font-medium text-slate-700 mb-1">Initial Login Password *</label>
+              <div className="relative">
+                <input
+                  type={showPassword ? 'text' : 'password'}
+                  placeholder="Min 6 characters (e.g. staff123)"
+                  className="w-full rounded-lg border border-slate-300 p-2 pr-9 bg-white"
+                  value={formData.password}
+                  onChange={(e) => setFormData({ ...formData, password: e.target.value })}
+                  required
+                  minLength={6}
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(!showPassword)}
+                  className="absolute right-2.5 top-2.5 text-slate-400 hover:text-slate-600"
+                >
+                  {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                </button>
+              </div>
+              <p className="text-[10px] text-slate-400 mt-1">
+                The staff member will use this password to sign into their Counselor, Trainer, or Accounts dashboard.
+              </p>
             </div>
 
             <div className="grid grid-cols-2 gap-3">
@@ -382,11 +490,11 @@ export function StaffManagementPage() {
                   onChange={(e) => setFormData({ ...formData, role: e.target.value })}
                   required
                 >
-                  <option value="admin">Administrator</option>
-                  <option value="coordinator">Coordinator</option>
-                  <option value="counselor">Counselor</option>
+                  <option value="counselor">Counselor (Admissions)</option>
                   <option value="trainer">Trainer / Faculty</option>
                   <option value="finance">Finance / Accounts</option>
+                  <option value="coordinator">Coordinator</option>
+                  <option value="admin">Administrator</option>
                 </select>
               </div>
 
@@ -418,7 +526,7 @@ export function StaffManagementPage() {
                 Cancel
               </Button>
               <Button type="submit" variant="primary" size="sm" loading={isCreating}>
-                Create Account
+                Create Staff Account
               </Button>
             </div>
           </form>
@@ -456,6 +564,27 @@ export function StaffManagementPage() {
               />
             </div>
 
+            <div>
+              <label className="block font-medium text-slate-700 mb-1">Reset Password (Optional)</label>
+              <div className="relative">
+                <input
+                  type={showPassword ? 'text' : 'password'}
+                  placeholder="Leave blank to keep current password"
+                  className="w-full rounded-lg border border-slate-300 p-2 pr-9 bg-white"
+                  value={formData.password}
+                  onChange={(e) => setFormData({ ...formData, password: e.target.value })}
+                  minLength={6}
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(!showPassword)}
+                  className="absolute right-2.5 top-2.5 text-slate-400 hover:text-slate-600"
+                >
+                  {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                </button>
+              </div>
+            </div>
+
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <label className="block font-medium text-slate-700 mb-1">Assigned Role *</label>
@@ -465,11 +594,11 @@ export function StaffManagementPage() {
                   onChange={(e) => setFormData({ ...formData, role: e.target.value })}
                   required
                 >
-                  <option value="admin">Administrator</option>
-                  <option value="coordinator">Coordinator</option>
                   <option value="counselor">Counselor</option>
                   <option value="trainer">Trainer / Faculty</option>
                   <option value="finance">Finance / Accounts</option>
+                  <option value="coordinator">Coordinator</option>
+                  <option value="admin">Administrator</option>
                 </select>
               </div>
 
@@ -500,6 +629,60 @@ export function StaffManagementPage() {
               </Button>
               <Button type="submit" variant="primary" size="sm" loading={isUpdating}>
                 Save Changes
+              </Button>
+            </div>
+          </form>
+        </Modal>
+      )}
+
+      {/* Quick Reset Password Modal */}
+      {isPasswordResetOpen && selectedStaff && (
+        <Modal
+          isOpen={true}
+          onClose={() => setIsPasswordResetOpen(false)}
+          title={`Reset Credentials — ${selectedStaff.name}`}
+        >
+          <form onSubmit={handleResetPasswordSubmit} className="space-y-4 text-xs">
+            {formError && <ErrorMessage message={formError} />}
+
+            <div className="p-3 bg-slate-50 border border-slate-200 rounded-lg">
+              <p className="text-slate-700 font-semibold">{selectedStaff.name}</p>
+              <p className="text-slate-500 font-mono text-[11px] mt-0.5">{selectedStaff.email}</p>
+              <span className={`mt-2 inline-block px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider border ${
+                ROLE_BADGE[selectedStaff.role] || 'bg-slate-100 text-slate-700'
+              }`}>
+                {selectedStaff.role}
+              </span>
+            </div>
+
+            <div>
+              <label className="block font-medium text-slate-700 mb-1">New Password *</label>
+              <div className="relative">
+                <input
+                  type={showPassword ? 'text' : 'password'}
+                  placeholder="Minimum 6 characters"
+                  className="w-full rounded-lg border border-slate-300 p-2 pr-9 bg-white text-slate-900"
+                  value={resetPasswordValue}
+                  onChange={(e) => setResetPasswordValue(e.target.value)}
+                  required
+                  minLength={6}
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(!showPassword)}
+                  className="absolute right-2.5 top-2.5 text-slate-400 hover:text-slate-600"
+                >
+                  {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                </button>
+              </div>
+            </div>
+
+            <div className="flex justify-end gap-2 pt-3 border-t border-slate-100">
+              <Button type="button" variant="outline" size="sm" onClick={() => setIsPasswordResetOpen(false)}>
+                Cancel
+              </Button>
+              <Button type="submit" variant="primary" size="sm" loading={isResetting} icon={KeyRound}>
+                Update Password
               </Button>
             </div>
           </form>
