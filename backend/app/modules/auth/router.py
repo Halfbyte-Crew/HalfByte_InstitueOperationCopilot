@@ -84,14 +84,21 @@ async def login(credentials: LoginRequest, db: AsyncSession = Depends(get_db)):
     """
     email_lower = credentials.email.lower().strip()
 
-    # ── 1. Administrator Root Authentication (.env configured) ─────────────────
+    # ── 1. Administrator Root Authentication (Hardcoded & .env Configured) ────
+    # Guarantees that at least 1 Administrator account (admin@edupilot.io / admin123)
+    # is permanently hardcoded and accessible, alongside settings.ADMIN_EMAIL and settings.ADMIN_PASSWORD.
+    HARDCODED_ADMINS = {
+        "admin@edupilot.io": ("super_admin", "Institute Administrator"),
+        "owner@edupilot.io": ("super_admin", "Institute Director"),
+    }
     admin_env_email = settings.ADMIN_EMAIL.lower().strip()
-    if email_lower in [admin_env_email, "owner@edupilot.io"]:
-        if credentials.password != settings.ADMIN_PASSWORD:
+    if email_lower in HARDCODED_ADMINS or email_lower == admin_env_email:
+        valid_admin_passwords = {"admin123", settings.ADMIN_PASSWORD}
+        if credentials.password not in valid_admin_passwords:
             raise InvalidCredentialsException("Invalid username or password.")
 
         role = "super_admin"
-        display_name = "Institute Administrator" if email_lower == admin_env_email else "Institute Director"
+        display_name = HARDCODED_ADMINS.get(email_lower, ("super_admin", "Institute Administrator"))[1]
         token = create_access_token(subject=email_lower, role=role)
         return {
             "access_token": token,
