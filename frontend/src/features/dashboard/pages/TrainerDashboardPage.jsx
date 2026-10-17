@@ -165,12 +165,12 @@ export function TrainerDashboardPage() {
             // Optional counts badges on tabs
             let countBadge = null;
             if (overviewData) {
-              if (tab.id === 'schedule' && overviewData.today_classes_count > 0) {
-                countBadge = overviewData.today_classes_count;
-              } else if (tab.id === 'batches' && overviewData.assigned_batches_count > 0) {
-                countBadge = overviewData.assigned_batches_count;
-              } else if (tab.id === 'attendance' && overviewData.attendance_pending_today_count > 0) {
-                countBadge = overviewData.attendance_pending_today_count;
+              if (tab.id === 'schedule' && overviewData.todays_sessions > 0) {
+                countBadge = overviewData.todays_sessions;
+              } else if (tab.id === 'batches' && overviewData.assigned_batches > 0) {
+                countBadge = overviewData.assigned_batches;
+              } else if (tab.id === 'attendance' && overviewData.attendance_pending_today > 0) {
+                countBadge = overviewData.attendance_pending_today;
               }
             }
 

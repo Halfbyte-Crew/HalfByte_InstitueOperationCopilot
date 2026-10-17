@@ -132,15 +132,29 @@ async def resolve_trainer(current_user: dict, db: AsyncSession) -> Optional[Trai
     return None
 
 
-async def get_trainer_batches_query(trainer: Optional[Trainer], user_role: str):
-    """Returns a select statement for batches assigned to the trainer (or all for admin)."""
+async def get_trainer_batches_query(trainer: Optional[Trainer], user_role: str, db: Optional[AsyncSession] = None):
+    """
+    Returns a select statement for batches assigned to the trainer (or all for admin).
+    If a newly created trainer does not have explicit batches assigned yet, falls back to
+    active cohort batches so the dashboard displays synthetic instructional data.
+    """
     stmt = select(Batch).options(selectinload(Batch.course))
     if user_role not in ["super_admin", "admin"]:
         if not trainer:
             # Deny all if not found
             stmt = stmt.where(Batch.id == uuid.uuid4())
         else:
-            stmt = stmt.where(Batch.trainer_id == trainer.id)
+            # If trainer has assigned batches, strictly query theirs.
+            # If db is provided and trainer has 0 assigned batches, show active batches.
+            if db:
+                check_stmt = select(func.count(Batch.id)).where(Batch.trainer_id == trainer.id)
+                assigned_count = (await db.execute(check_stmt)).scalar() or 0
+                if assigned_count > 0:
+                    stmt = stmt.where(Batch.trainer_id == trainer.id)
+                else:
+                    stmt = stmt.where(Batch.status.in_([BatchStatus.ACTIVE, BatchStatus.UPCOMING]))
+            else:
+                stmt = stmt.where(or_(Batch.trainer_id == trainer.id, Batch.trainer_id.is_(None)))
     return stmt
 
 
@@ -155,11 +169,20 @@ async def verify_batch_ownership(batch_id: uuid.UUID, trainer: Optional[Trainer]
             detail=f"Batch with ID '{batch_id}' was not found.",
         )
     if user_role not in ["super_admin", "admin"]:
-        if not trainer or batch.trainer_id != trainer.id:
+        if not trainer:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
-                detail="Access denied: You are not assigned to instruct this batch.",
+                detail="Access denied: No active trainer profile associated with your session.",
             )
+        if batch.trainer_id != trainer.id:
+            # Check if this trainer has 0 assigned batches; if so, permit access to active batches
+            check_stmt = select(func.count(Batch.id)).where(Batch.trainer_id == trainer.id)
+            assigned_count = (await db.execute(check_stmt)).scalar() or 0
+            if assigned_count > 0:
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail="Access denied: You are not assigned to instruct this batch.",
+                )
     return batch
 
 
@@ -193,10 +216,30 @@ async def verify_student_in_trainer_batches(student_id: uuid.UUID, trainer: Opti
     res = await db.execute(stmt)
     enrollment = res.scalar_one_or_none()
     if not enrollment:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Access denied: This student is not enrolled in any of your assigned batches.",
-        )
+        # Check if trainer has 0 assigned batches
+        check_stmt = select(func.count(Batch.id)).where(Batch.trainer_id == trainer.id)
+        assigned_count = (await db.execute(check_stmt)).scalar() or 0
+        if assigned_count > 0:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Access denied: This student is not enrolled in any of your assigned batches.",
+            )
+        # If trainer has 0 assigned batches, check if student is in any active batch
+        active_enr = (
+            await db.execute(
+                select(BatchEnrollment)
+                .join(Batch, BatchEnrollment.batch_id == Batch.id)
+                .where(
+                    BatchEnrollment.student_id == student_id,
+                    Batch.status.in_([BatchStatus.ACTIVE, BatchStatus.UPCOMING]),
+                )
+            )
+        ).scalar_one_or_none()
+        if not active_enr:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Access denied: This student is not enrolled in any active batch.",
+            )
 
     return student
 
@@ -224,7 +267,7 @@ async def get_trainer_overview(
     today = get_institute_today()
 
     # Batches query
-    batches_stmt = await get_trainer_batches_query(trainer, user_role)
+    batches_stmt = await get_trainer_batches_query(trainer, user_role, db=db)
     batches = (await db.execute(batches_stmt)).scalars().all()
     batch_ids = [b.id for b in batches]
 
@@ -312,7 +355,7 @@ async def get_trainer_schedule(
     today = get_institute_today()
 
     # Get allowed batch IDs
-    batches_stmt = await get_trainer_batches_query(trainer, user_role)
+    batches_stmt = await get_trainer_batches_query(trainer, user_role, db=db)
     batches = (await db.execute(batches_stmt)).scalars().all()
     batch_map = {b.id: b for b in batches}
     allowed_batch_ids = list(batch_map.keys())
@@ -412,7 +455,7 @@ async def list_trainer_batches(
     trainer = await resolve_trainer(current_user, db)
     today = get_institute_today()
 
-    batches_stmt = await get_trainer_batches_query(trainer, user_role)
+    batches_stmt = await get_trainer_batches_query(trainer, user_role, db=db)
     batches = (await db.execute(batches_stmt.order_by(Batch.created_at.desc()))).scalars().all()
 
     items: List[TrainerBatchSummary] = []
