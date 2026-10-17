@@ -10,12 +10,14 @@ import { RoleGuard } from '../layouts/RoleGuard';
 
 // Role-specific dashboard pages
 import { OwnerDashboardPage } from '../features/dashboard/pages/OwnerDashboardPage';
+import { OperationsSchedulingPage } from '../features/dashboard/pages/OperationsSchedulingPage';
 import { CounselorDashboardPage } from '../features/dashboard/pages/CounselorDashboardPage';
 import { TrainerDashboardPage } from '../features/dashboard/pages/TrainerDashboardPage';
 import { AccountsDashboardPage } from '../features/dashboard/pages/AccountsDashboardPage';
 import { StudentDashboardPage } from '../features/dashboard/pages/StudentDashboardPage';
 
 // Feature pages
+import { StaffManagementPage } from '../features/staff/pages/StaffManagementPage';
 import { StudentsPage } from '../features/students/pages/StudentsPage';
 import { CoursesPage } from '../features/courses/pages/CoursesPage';
 import { BatchesPage } from '../features/batches/pages/BatchesPage';
@@ -99,6 +101,22 @@ export const router = createBrowserRouter([
         index: true,
         // Redirect root to /login; after login the user lands on their role dashboard
         element: <Navigate to="/login" replace />,
+      },
+      {
+        path: 'operations',
+        element: (
+          <RoleGuard allowedRoles={OWNER_ROLES}>
+            <OperationsSchedulingPage />
+          </RoleGuard>
+        ),
+      },
+      {
+        path: 'staff',
+        element: (
+          <RoleGuard allowedRoles={OWNER_ROLES}>
+            <StaffManagementPage />
+          </RoleGuard>
+        ),
       },
       { path: 'students', element: <StudentsPage /> },
       { path: 'courses', element: <CoursesPage /> },

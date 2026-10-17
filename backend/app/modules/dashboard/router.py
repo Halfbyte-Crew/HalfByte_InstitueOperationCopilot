@@ -5,9 +5,11 @@ Each endpoint independently enforces RBAC via require_roles().
 Financial data is never included in trainer or student payloads.
 """
 from decimal import Decimal
-from typing import List, Optional
-from fastapi import APIRouter, Depends
+from typing import List, Optional, Dict, Any
+import uuid
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import func, select
+from sqlalchemy.orm import selectinload
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.dependencies import get_current_user, require_roles
@@ -17,18 +19,175 @@ from app.models.institute import (
     AttendanceStatus,
     Batch,
     BatchEnrollment,
+    ClassSchedule,
+    ClassScheduleStatus,
     Course,
     FeeInstallment,
     FeeStatus,
     Student,
     Trainer,
 )
+from app.modules.dashboard.admin_service import (
+    acknowledge_alert,
+    detect_scheduling_conflicts,
+    get_admin_overview,
+    get_operational_alerts,
+    get_upcoming_classes,
+)
+from app.schemas.institute import (
+    AdminOverviewResponse,
+    ClassScheduleCreate,
+    ClassScheduleUpdate,
+    ConflictDetail,
+    OperationalAlert,
+)
 
 router = APIRouter(prefix="/dashboard", tags=["Dashboard"])
 
 
 # ---------------------------------------------------------------------------
-# Owner / Admin Dashboard
+# Admin Dashboard — Operations, Scheduling & Real Governance Metrics
+# ---------------------------------------------------------------------------
+
+@router.get(
+    "/admin/overview",
+    response_model=AdminOverviewResponse,
+    dependencies=[Depends(require_roles(["super_admin", "admin"]))],
+)
+async def admin_overview(db: AsyncSession = Depends(get_db)):
+    """Institute-wide overview statistics (students, batches, trainers, upcoming classes, alerts)."""
+    return await get_admin_overview(db)
+
+
+@router.get(
+    "/admin/upcoming-classes",
+    dependencies=[Depends(require_roles(["super_admin", "admin"]))],
+)
+async def admin_upcoming_classes(
+    limit: int = Query(30, ge=1, le=100),
+    db: AsyncSession = Depends(get_db),
+):
+    """Upcoming class sessions with trainer, room, and timing information."""
+    return await get_upcoming_classes(db, limit=limit)
+
+
+@router.get(
+    "/admin/conflicts",
+    response_model=List[ConflictDetail],
+    dependencies=[Depends(require_roles(["super_admin", "admin"]))],
+)
+async def admin_conflicts(db: AsyncSession = Depends(get_db)):
+    """Detects scheduling conflicts (trainer double-bookings, classroom conflicts)."""
+    return await detect_scheduling_conflicts(db)
+
+
+@router.get(
+    "/admin/alerts",
+    response_model=List[OperationalAlert],
+    dependencies=[Depends(require_roles(["super_admin", "admin"]))],
+)
+async def admin_alerts(db: AsyncSession = Depends(get_db)):
+    """Operational alerts panel (conflicts, missing trainers, pending approvals, AI health insights)."""
+    return await get_operational_alerts(db)
+
+
+@router.post(
+    "/admin/alerts/{alert_id}/acknowledge",
+    dependencies=[Depends(require_roles(["super_admin", "admin"]))],
+)
+async def acknowledge_admin_alert(alert_id: str):
+    """Allows authorized admin to acknowledge or dismiss an alert."""
+    acknowledge_alert(alert_id)
+    return {"message": f"Alert '{alert_id}' acknowledged successfully."}
+
+
+@router.post(
+    "/admin/schedules",
+    status_code=status.HTTP_201_CREATED,
+    dependencies=[Depends(require_roles(["super_admin", "admin"]))],
+)
+async def create_class_schedule(
+    payload: ClassScheduleCreate,
+    db: AsyncSession = Depends(get_db),
+):
+    """Create a new class schedule session."""
+    batch = await db.get(Batch, payload.batch_id)
+    if not batch:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Batch '{payload.batch_id}' not found.",
+        )
+    if payload.trainer_id:
+        trainer = await db.get(Trainer, payload.trainer_id)
+        if not trainer:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Trainer '{payload.trainer_id}' not found.",
+            )
+
+    schedule = ClassSchedule(**payload.model_dump())
+    db.add(schedule)
+    await db.commit()
+    await db.refresh(schedule)
+    return {"id": str(schedule.id), "message": "Class schedule created successfully."}
+
+
+@router.patch(
+    "/admin/schedules/{schedule_id}",
+    dependencies=[Depends(require_roles(["super_admin", "admin"]))],
+)
+async def update_class_schedule(
+    schedule_id: uuid.UUID,
+    payload: ClassScheduleUpdate,
+    db: AsyncSession = Depends(get_db),
+):
+    """Updates or reassigns a class schedule (resolves conflicts safely)."""
+    schedule = await db.get(ClassSchedule, schedule_id)
+    if not schedule:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Class schedule '{schedule_id}' not found.",
+        )
+
+    data = payload.model_dump(exclude_unset=True)
+    if "trainer_id" in data and data["trainer_id"]:
+        trainer = await db.get(Trainer, data["trainer_id"])
+        if not trainer:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Trainer '{data['trainer_id']}' not found.",
+            )
+
+    for field, val in data.items():
+        setattr(schedule, field, val)
+
+    await db.commit()
+    await db.refresh(schedule)
+    return {"id": str(schedule.id), "message": "Class schedule updated successfully."}
+
+
+@router.delete(
+    "/admin/schedules/{schedule_id}",
+    dependencies=[Depends(require_roles(["super_admin", "admin"]))],
+)
+async def delete_class_schedule(
+    schedule_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+):
+    """Cancels or deletes a scheduled class session."""
+    schedule = await db.get(ClassSchedule, schedule_id)
+    if not schedule:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Class schedule '{schedule_id}' not found.",
+        )
+    await db.delete(schedule)
+    await db.commit()
+    return {"message": "Class schedule deleted successfully."}
+
+
+# ---------------------------------------------------------------------------
+# Owner / Admin Legacy KPI Summary (Backward Compatible)
 # ---------------------------------------------------------------------------
 
 @router.get(
@@ -131,7 +290,9 @@ async def trainer_schedule(
     NEVER includes fee or financial data — RBAC enforced at schema level.
     """
     batches = (
-        await db.execute(select(Batch).order_by(Batch.created_at.desc()).limit(20))
+        await db.execute(
+            select(Batch).options(selectinload(Batch.course)).order_by(Batch.created_at.desc()).limit(20)
+        )
     ).scalars().all()
 
     batch_summaries = []
@@ -142,11 +303,12 @@ async def trainer_schedule(
             )
         ).scalar() or 0
 
+        batch_name = batch.course.title if batch.course else batch.code
         batch_summaries.append(
             {
                 "id": str(batch.id),
                 "code": batch.code,
-                "name": batch.name,
+                "name": batch_name,
                 "status": batch.status.value if hasattr(batch.status, "value") else str(batch.status),
                 "enrolled_students": enrolled_count,
                 "start_date": batch.start_date.isoformat() if batch.start_date else None,
