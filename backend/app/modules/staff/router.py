@@ -1,17 +1,21 @@
 """
 Staff Management API router.
 Strictly restricted to 'super_admin' and 'admin' roles.
+Allows administrators to onboard staff, assign roles (counselor, trainer, finance/accounts),
+set and reset login credentials, and manage active status.
 Guards against admin lockout and self-deactivation.
 """
 from typing import List, Optional
 import uuid
 from fastapi import APIRouter, Depends, HTTPException, Query, status
+from pydantic import BaseModel, Field
 from sqlalchemy import func, select, or_
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.dependencies import get_current_user, require_roles
+from app.core.security import get_password_hash
 from app.database.session import get_db
-from app.models.institute import StaffMember
+from app.models.institute import StaffMember, Trainer
 from app.schemas.institute import (
     StaffMemberCreate,
     StaffMemberResponse,
@@ -25,6 +29,11 @@ router = APIRouter(
 )
 
 PERMITTED_ROLES = {"admin", "counselor", "coordinator", "trainer", "finance"}
+
+
+class ResetStaffPasswordRequest(BaseModel):
+    """Payload to reset a staff member's login credentials."""
+    password: str = Field(..., min_length=6, max_length=128, description="New login password for staff")
 
 
 @router.get("", response_model=List[StaffMemberResponse])
@@ -65,7 +74,11 @@ async def create_staff(
     db: AsyncSession = Depends(get_db),
     current_user: dict = Depends(get_current_user),
 ):
-    """Create or invite a new staff member."""
+    """
+    Administrator creates a staff member with role and login credentials.
+    Enforces email uniqueness, role whitelist, and hashes the initial password.
+    If the role is 'trainer', ensures a corresponding Trainer profile is created.
+    """
     email_normalized = str(payload.email).strip().lower()
     existing = await db.execute(
         select(StaffMember).where(StaffMember.email == email_normalized)
@@ -86,8 +99,29 @@ async def create_staff(
     data = payload.model_dump()
     data["email"] = email_normalized
     data["role"] = role_normalized
+
+    # Securely hash password if provided
+    raw_password = data.pop("password", None)
+    if raw_password:
+        data["password_hash"] = get_password_hash(raw_password)
+
     staff = StaffMember(**data)
     db.add(staff)
+
+    # If onboarded as a trainer, create or link Trainer profile for timetable assignment
+    if role_normalized == "trainer":
+        stmt_trainer = select(Trainer).where(func.lower(Trainer.email) == email_normalized)
+        existing_trainer = (await db.execute(stmt_trainer)).scalar_one_or_none()
+        if not existing_trainer:
+            trainer_profile = Trainer(
+                name=data["name"],
+                email=email_normalized,
+                phone=data.get("phone"),
+                specialization=data.get("department") or "Faculty",
+                bio=f"Faculty member in {data.get('department') or 'Academics'}",
+            )
+            db.add(trainer_profile)
+
     await db.commit()
     await db.refresh(staff)
     return staff
@@ -116,7 +150,7 @@ async def update_staff(
     current_user: dict = Depends(get_current_user),
 ):
     """
-    Update permitted staff information.
+    Update permitted staff information and optional password reset.
     Guards against removing the last admin or an administrator removing their own admin role.
     """
     staff = await db.get(StaffMember, staff_id)
@@ -127,6 +161,11 @@ async def update_staff(
         )
 
     data = payload.model_dump(exclude_unset=True)
+
+    # Handle password reset if provided
+    raw_password = data.pop("password", None)
+    if raw_password:
+        staff.password_hash = get_password_hash(raw_password)
 
     # Check role change safety
     if "role" in data and data["role"] is not None:
@@ -169,6 +208,27 @@ async def update_staff(
     for field, val in data.items():
         setattr(staff, field, val)
 
+    await db.commit()
+    await db.refresh(staff)
+    return staff
+
+
+@router.post("/{staff_id}/reset-password", response_model=StaffMemberResponse)
+async def reset_staff_password(
+    staff_id: uuid.UUID,
+    payload: ResetStaffPasswordRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: dict = Depends(get_current_user),
+):
+    """Administrator resets credentials for a staff member."""
+    staff = await db.get(StaffMember, staff_id)
+    if not staff:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Staff member '{staff_id}' not found.",
+        )
+
+    staff.password_hash = get_password_hash(payload.password)
     await db.commit()
     await db.refresh(staff)
     return staff

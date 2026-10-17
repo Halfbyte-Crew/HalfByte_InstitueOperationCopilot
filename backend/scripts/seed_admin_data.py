@@ -100,12 +100,19 @@ async def seed():
             },
         ]
 
+        from app.core.security import get_password_hash
+        default_pwd_hash = get_password_hash("admin123")
+
         for s in staff_data:
             existing = (
                 await session.execute(select(StaffMember).where(StaffMember.email == s["email"]))
             ).scalar_one_or_none()
             if not existing:
-                session.add(StaffMember(**s))
+                s_copy = dict(s)
+                s_copy["password_hash"] = default_pwd_hash
+                session.add(StaffMember(**s_copy))
+            elif not existing.password_hash:
+                existing.password_hash = default_pwd_hash
 
         await session.commit()
         print("Staff members seeded.")

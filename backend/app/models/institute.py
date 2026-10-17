@@ -333,6 +333,11 @@ class StaffMember(Base, UUIDPrimaryKeyMixin, TimestampMixin):
     role: Mapped[str] = mapped_column(String(50), nullable=False, default="coordinator", index=True)
     department: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    password_hash: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+
+    @property
+    def has_password(self) -> bool:
+        return bool(self.password_hash)
 
 
 class ApprovalRequest(Base, UUIDPrimaryKeyMixin, TimestampMixin):

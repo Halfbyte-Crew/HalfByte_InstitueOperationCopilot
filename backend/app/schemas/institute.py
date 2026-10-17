@@ -318,7 +318,7 @@ class StaffMemberBase(BaseModel):
 
 
 class StaffMemberCreate(StaffMemberBase):
-    pass
+    password: Optional[str] = Field(None, min_length=6, max_length=128, description="Initial login password for staff")
 
 
 class StaffMemberUpdate(BaseModel):
@@ -327,10 +327,12 @@ class StaffMemberUpdate(BaseModel):
     role: Optional[str] = Field(None, min_length=2, max_length=50)
     department: Optional[str] = Field(None, max_length=100)
     is_active: Optional[bool] = None
+    password: Optional[str] = Field(None, min_length=6, max_length=128, description="Optional new password to reset staff credentials")
 
 
 class StaffMemberResponse(StaffMemberBase, BaseSchema):
     id: uuid.UUID
+    has_password: bool = False
     created_at: datetime
     updated_at: datetime
 

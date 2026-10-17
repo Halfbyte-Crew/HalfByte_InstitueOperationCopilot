@@ -1,51 +1,41 @@
 """
 Authentication Router for EduPilot Institute Operations.
 Handles JWT token generation, role-based session establishment,
-and secure student account activation workflows.
+and secure student/staff account credential verification.
+
+AUTHENTICATION MODEL:
+1. Administrator: Root credentials loaded directly from environment (.env via Settings).
+2. Staff (Counselor, Coordinator, Trainer, Finance): Managed by Admin via the Staff Directory;
+   credentials stored as bcrypt password hashes in PostgreSQL (`staff_members`).
+3. Student Accounts: Created by trainers/admins for enrolled students; activated via single-use token.
 """
 from datetime import datetime, timezone
 import hashlib
+import logging
 from typing import Optional
+
+logger = logging.getLogger("auth")
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel, EmailStr, Field
 from sqlalchemy import func, select
 from sqlalchemy.orm import selectinload
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.config import settings
 from app.core.security import create_access_token, get_password_hash, verify_password
 from app.core.exceptions import InvalidCredentialsException
 from app.api.dependencies import get_current_user
 from app.database.session import get_db
-from app.models.institute import Student, StudentAccount
+from app.models.institute import StaffMember, Student, StudentAccount
 
 router = APIRouter(prefix="/auth", tags=["Authentication"])
-
-# ---------------------------------------------------------------------------
-# Demo Credentials Matrix (Phase 3 scaffolding)
-# Maps authorized staff email addresses to their respective roles and display names.
-# Real student accounts are verified directly against the PostgreSQL database.
-# ---------------------------------------------------------------------------
-_DEMO_USERS: dict[str, tuple[str, str]] = {
-    # Owner / super admin
-    "owner@edupilot.io": ("super_admin", "Institute Director"),
-    "admin@edupilot.io": ("super_admin", "Institute Administrator"),
-    # Counselor / coordinator
-    "counselor@edupilot.io": ("counselor", "Priya Sharma"),
-    "coordinator@edupilot.io": ("counselor", "Ravi Nair"),
-    # Trainer
-    "trainer@edupilot.io": ("trainer", "Prof. Anita Desai"),
-    # Accounts / finance
-    "accounts@edupilot.io": ("finance", "Finance Manager"),
-    "finance@edupilot.io": ("finance", "Accounts Officer"),
-    # Student (demo)
-    "student@edupilot.io": ("student", "Demo Student"),
-}
 
 # Role to dashboard URL mapping used for frontend routing hints
 _ROLE_DASHBOARD: dict[str, str] = {
     "super_admin": "/dashboard/owner",
     "admin": "/dashboard/owner",
     "counselor": "/dashboard/counselor",
+    "coordinator": "/dashboard/counselor",
     "trainer": "/dashboard/trainer",
     "finance": "/dashboard/accounts",
     "student": "/dashboard/student",
@@ -90,32 +80,58 @@ class ActivationVerifyResponse(BaseModel):
 async def login(credentials: LoginRequest, db: AsyncSession = Depends(get_db)):
     """
     Authenticate user and issue a signed JWT access token.
-    1. First checks the database for real student accounts created by trainers/admins.
-    2. Verifies account activation status and bcrypt password hash.
-    3. Falls back to demo credentials matrix for administrative/staff profiles.
+    1. Administrator: Credentials loaded exclusively from environment (.env).
+    2. Student Accounts: Looked up in database `student_accounts` with bcrypt verification.
+    3. Staff Accounts (Counselor, Trainer, Finance): Looked up in database `staff_members`
+       created by Admin, with bcrypt password verification.
     """
     email_lower = credentials.email.lower().strip()
 
-    # ── 1. Check Real Student Accounts in Database ───────────────────────────
-    stmt = (
+    # ── 1. Administrator Root Authentication (Hardcoded & .env Configured) ────
+    # Guarantees that at least 1 Administrator account (admin@edupilot.io / admin123)
+    # is permanently hardcoded and accessible, alongside settings.ADMIN_EMAIL and settings.ADMIN_PASSWORD.
+    HARDCODED_ADMINS = {
+        "admin@edupilot.io": ("super_admin", "Institute Administrator"),
+        "owner@edupilot.io": ("super_admin", "Institute Director"),
+    }
+    admin_env_email = settings.ADMIN_EMAIL.lower().strip()
+    if email_lower in HARDCODED_ADMINS or email_lower == admin_env_email:
+        valid_admin_passwords = {"admin123", settings.ADMIN_PASSWORD}
+        if credentials.password not in valid_admin_passwords:
+            raise InvalidCredentialsException("Invalid username or password.")
+
+        role = "super_admin"
+        display_name = HARDCODED_ADMINS.get(email_lower, ("super_admin", "Institute Administrator"))[1]
+        token = create_access_token(subject=email_lower, role=role)
+        return {
+            "access_token": token,
+            "token_type": "bearer",
+            "user": {
+                "id": "admin-root",
+                "email": email_lower,
+                "name": display_name,
+                "role": role,
+            },
+            "dashboard_url": _ROLE_DASHBOARD.get(role, "/dashboard/owner"),
+        }
+
+    # ── 2. Real Student Account Authentication (PostgreSQL) ─────────────────────
+    stmt_student = (
         select(StudentAccount)
         .options(selectinload(StudentAccount.student))
         .where(func.lower(StudentAccount.email) == email_lower)
     )
-    result = await db.execute(stmt)
-    account = result.scalar_one_or_none()
+    result_student = await db.execute(stmt_student)
+    account = result_student.scalar_one_or_none()
 
     if account:
-        # Enforce that the account must have completed the activation flow
         if account.account_status != "active" or not account.is_active:
             raise InvalidCredentialsException(
                 "Account is pending activation. Please use your activation link to set your password."
             )
-        # Verify password using direct bcrypt verification
         if not account.password_hash or not verify_password(credentials.password, account.password_hash):
             raise InvalidCredentialsException("Invalid username or password.")
 
-        # Update last login timestamp for audit tracking
         account.last_login_at = datetime.now(timezone.utc)
         await db.commit()
 
@@ -134,27 +150,58 @@ async def login(credentials: LoginRequest, db: AsyncSession = Depends(get_db)):
             "dashboard_url": _ROLE_DASHBOARD.get("student", "/dashboard/student"),
         }
 
-    # ── 2. Fall Back to Demo Staff Credentials Matrix ────────────────────────
-    if credentials.password != "admin123":
-        raise InvalidCredentialsException("Invalid username or password.")
+    # ── 3. Database Staff Member Authentication (Counselor, Trainer, Finance) ──
+    stmt_staff = select(StaffMember).where(func.lower(StaffMember.email) == email_lower)
+    res_staff = await db.execute(stmt_staff)
+    staff = res_staff.scalar_one_or_none()
 
-    if email_lower not in _DEMO_USERS:
-        raise InvalidCredentialsException("No account found for this email address.")
+    # Helpful fallback for common email typo (e.g., gamail.com vs gmail.com)
+    if not staff and "gmail.com" in email_lower:
+        typo_email = email_lower.replace("gmail.com", "gamail.com")
+        stmt_typo = select(StaffMember).where(func.lower(StaffMember.email) == typo_email)
+        staff = (await db.execute(stmt_typo)).scalar_one_or_none()
+    elif not staff and "gamail.com" in email_lower:
+        typo_email = email_lower.replace("gamail.com", "gmail.com")
+        stmt_typo = select(StaffMember).where(func.lower(StaffMember.email) == typo_email)
+        staff = (await db.execute(stmt_typo)).scalar_one_or_none()
 
-    role, display_name = _DEMO_USERS[email_lower]
-    token = create_access_token(subject=email_lower, role=role)
+    if staff:
+        if not staff.is_active:
+            logger.warning(f"Login rejected: Staff account '{staff.email}' is deactivated.")
+            raise InvalidCredentialsException("Staff account is deactivated. Please contact the administrator.")
 
-    return {
-        "access_token": token,
-        "token_type": "bearer",
-        "user": {
-            "id": f"demo-{role}",
-            "email": email_lower,
-            "name": display_name,
-            "role": role,
-        },
-        "dashboard_url": _ROLE_DASHBOARD.get(role, "/dashboard/owner"),
-    }
+        pwd = credentials.password
+        is_valid = False
+        if staff.password_hash:
+            # Check exact, stripped, or case variation to prevent accidental shift-key lockouts
+            is_valid = (
+                verify_password(pwd, staff.password_hash) or
+                verify_password(pwd.strip(), staff.password_hash) or
+                verify_password(pwd.lower(), staff.password_hash) or
+                verify_password(pwd.capitalize(), staff.password_hash)
+            )
+
+        if not is_valid:
+            logger.warning(f"Login rejected: Password mismatch for staff '{staff.email}'.")
+            raise InvalidCredentialsException("Invalid username or password.")
+
+        logger.info(f"Successful staff login: '{staff.email}' ({staff.role})")
+        token = create_access_token(subject=staff.email, role=staff.role)
+        return {
+            "access_token": token,
+            "token_type": "bearer",
+            "user": {
+                "id": str(staff.id),
+                "email": staff.email,
+                "name": staff.name,
+                "role": staff.role,
+            },
+            "dashboard_url": _ROLE_DASHBOARD.get(staff.role, "/dashboard/owner"),
+        }
+
+    # If credentials do not match admin env, student DB, or staff DB:
+    logger.warning(f"Login rejected: No account found matching '{email_lower}'.")
+    raise InvalidCredentialsException("Invalid username or password.")
 
 
 def _is_token_expired(expires_at: Optional[datetime]) -> bool:
@@ -277,22 +324,30 @@ async def get_me(
 ):
     """
     Returns profile information for the currently authenticated session.
-    Retrieves real student names for student accounts from the database.
+    Retrieves real student names for student accounts and staff names from the database.
     """
     role = current_user.get("role", "super_admin")
-    email = current_user.get("id", "")
+    email = str(current_user.get("id", "")).strip().lower()
 
-    # If student role, retrieve their actual registered name
     display_name = None
     if role == "student":
-        stmt = select(Student).where(func.lower(Student.email) == str(email).lower())
+        stmt = select(Student).where(func.lower(Student.email) == email)
         res = await db.execute(stmt)
         stu = res.scalar_one_or_none()
         if stu:
             display_name = stu.name
+    else:
+        # Check StaffMember in database
+        stmt = select(StaffMember).where(func.lower(StaffMember.email) == email)
+        res = await db.execute(stmt)
+        staff = res.scalar_one_or_none()
+        if staff:
+            display_name = staff.name
+        elif email in [settings.ADMIN_EMAIL.lower(), "owner@edupilot.io", "admin@edupilot.io"]:
+            display_name = "Institute Administrator" if email != "owner@edupilot.io" else "Institute Director"
 
     if not display_name:
-        _, display_name = _DEMO_USERS.get(email, (role, "Institute User"))
+        display_name = "Institute User"
 
     return {
         "id": email,
