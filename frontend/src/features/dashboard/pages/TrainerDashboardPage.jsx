@@ -1,173 +1,265 @@
-import React from 'react';
-import { PageHeader } from '../../../components/common/PageHeader';
-import { ErrorMessage } from '../../../components/common/ErrorMessage';
-import { EmptyState } from '../../../components/common/EmptyState';
-import { Badge } from '../../../components/ui/Badge';
-import { Button } from '../../../components/ui/Button';
-import { CalendarDays, ClipboardCheck, Users, BookOpen } from 'lucide-react';
-import { useNavigate } from 'react-router-dom';
-import { useApi } from '../../../hooks/useApi';
-import { dashboardApi } from '../dashboardApi';
+import React, { useState, useEffect, useCallback } from 'react';
+import { useSearchParams } from 'react-router-dom';
+import {
+  LayoutDashboard,
+  Calendar,
+  BookOpen,
+  ClipboardCheck,
+  Clock,
+  TrendingUp,
+  RefreshCw,
+  ShieldCheck,
+  GraduationCap,
+} from 'lucide-react';
+import { useAuth } from '../../../app/providers';
+import { getTrainerOverview, getTrainerSchedule } from '../dashboardApi';
 
-const BATCH_STATUS_STYLE = {
-  active: 'bg-emerald-50 text-emerald-700 border-emerald-100',
-  upcoming: 'bg-sky-50 text-sky-700 border-sky-100',
-  completed: 'bg-slate-50 text-slate-500 border-slate-200',
-  cancelled: 'bg-rose-50 text-rose-700 border-rose-100',
-};
+// Sub-views
+import { TrainerOverviewView } from '../components/trainer/TrainerOverviewView';
+import { TrainerScheduleView } from '../components/trainer/TrainerScheduleView';
+import { TrainerBatchesView } from '../components/trainer/TrainerBatchesView';
+import { TrainerAttendanceView } from '../components/trainer/TrainerAttendanceView';
+import { TrainerAttendanceHistoryView } from '../components/trainer/TrainerAttendanceHistoryView';
+import { TrainerStudentProgressView } from '../components/trainer/TrainerStudentProgressView';
+import { StudentAccountModal } from '../components/trainer/StudentAccountModal';
 
-function BatchCard({ batch }) {
-  const statusStyle = BATCH_STATUS_STYLE[batch.status] ?? 'bg-slate-50 text-slate-500';
-
-  return (
-    <div className="p-4 rounded-lg border border-slate-200 bg-white hover:border-indigo-200 hover:shadow-sm transition-all">
-      <div className="flex items-start justify-between gap-2 mb-3">
-        <div>
-          <p className="text-sm font-semibold text-slate-900">{batch.name}</p>
-          <p className="text-xs text-slate-500 font-mono mt-0.5">{batch.code}</p>
-        </div>
-        <span className={`text-[11px] font-semibold px-2 py-0.5 rounded-full border capitalize ${statusStyle}`}>
-          {batch.status}
-        </span>
-      </div>
-      <div className="flex items-center gap-4 text-xs text-slate-500">
-        <span className="flex items-center gap-1">
-          <Users className="h-3 w-3" />
-          {batch.enrolled_students} students
-        </span>
-        {batch.start_date && (
-          <span className="flex items-center gap-1">
-            <CalendarDays className="h-3 w-3" />
-            {new Date(batch.start_date).toLocaleDateString('en-IN')}
-          </span>
-        )}
-      </div>
-    </div>
-  );
-}
+const TABS = [
+  { id: 'overview', label: 'Overview', icon: LayoutDashboard },
+  { id: 'schedule', label: 'My Schedule', icon: Calendar },
+  { id: 'batches', label: 'My Batches', icon: BookOpen },
+  { id: 'attendance', label: 'Mark Attendance', icon: ClipboardCheck },
+  { id: 'history', label: 'Attendance History', icon: Clock },
+  { id: 'progress', label: 'Student Progress', icon: TrendingUp },
+];
 
 export function TrainerDashboardPage() {
-  const navigate = useNavigate();
-  const { data, isLoading, error } = useApi(dashboardApi.getTrainerSchedule);
+  const { user } = useAuth();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const currentTab = searchParams.get('tab') || 'overview';
 
-  const batches = data?.assigned_batches ?? [];
+  // Overview data & schedule for badges & cards
+  const [overviewData, setOverviewData] = useState(null);
+  const [scheduleData, setScheduleData] = useState(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState(null);
+
+  // Preselected states for inter-tab workflows
+  const [preselectedSession, setPreselectedSession] = useState(null);
+  const [preselectedStudentId, setPreselectedStudentId] = useState(searchParams.get('student_id') || '');
+  const [preselectedBatchId, setPreselectedBatchId] = useState(searchParams.get('batch_id') || '');
+
+  // Student Account Modal state
+  const [accountModalStudent, setAccountModalStudent] = useState(null);
+
+  const fetchDashboardData = useCallback(async () => {
+    setIsLoading(true);
+    setError(null);
+    try {
+      const [overviewRes, scheduleRes] = await Promise.all([
+        getTrainerOverview(),
+        getTrainerSchedule(),
+      ]);
+      setOverviewData(overviewRes);
+      setScheduleData(scheduleRes);
+    } catch (err) {
+      console.error('Failed to load trainer overview:', err);
+      setError(err?.response?.data?.detail || err.message || 'Failed to load trainer data');
+    } finally {
+      setIsLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchDashboardData();
+  }, [fetchDashboardData]);
+
+  // Global navbar refresh listener
+  useEffect(() => {
+    const handleGlobalRefresh = () => {
+      fetchDashboardData();
+    };
+    window.addEventListener('edupilot:refresh', handleGlobalRefresh);
+    return () => window.removeEventListener('edupilot:refresh', handleGlobalRefresh);
+  }, [fetchDashboardData]);
+
+  // Tab change handler
+  const handleTabChange = (tabId, extraParams = {}) => {
+    const params = new URLSearchParams();
+    params.set('tab', tabId);
+    Object.entries(extraParams).forEach(([k, v]) => {
+      if (v) params.set(k, v);
+    });
+    setSearchParams(params);
+  };
+
+  // Workflow: jump to attendance tab with selected session
+  const handleSelectSessionForAttendance = (session) => {
+    setPreselectedSession(session);
+    handleTabChange('attendance', {
+      session_id: session.id,
+      batch_id: session.batch_id,
+    });
+  };
+
+  // Workflow: jump to student progress tab with selected student
+  const handleSelectStudentForProgress = (studentId, batchId) => {
+    setPreselectedStudentId(studentId);
+    if (batchId) setPreselectedBatchId(batchId);
+    handleTabChange('progress', {
+      student_id: studentId,
+      batch_id: batchId,
+    });
+  };
+
+  // Workflow: open student account modal
+  const handleSelectStudentForAccount = (student) => {
+    setAccountModalStudent(student);
+  };
 
   return (
-    <div>
-      <PageHeader
-        title="Trainer Dashboard"
-        description="Your assigned batches, today's schedule, and attendance overview."
-        action={
-          <Button variant="primary" icon={ClipboardCheck} onClick={() => navigate('/attendance')}>
-            Mark Attendance
-          </Button>
-        }
-      />
+    <div className="space-y-6">
+      {/* Top Banner / Navigation Header */}
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 border-b border-slate-200 pb-4">
+        <div>
+          <div className="flex items-center gap-2">
+            <h1 className="text-2xl font-bold text-slate-900 tracking-tight">
+              Trainer Academic Hub
+            </h1>
+            <span className="text-xs px-2.5 py-0.5 rounded-full font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
+              Faculty Active
+            </span>
+          </div>
+          <p className="text-sm text-slate-500 mt-1">
+            Logged in as <span className="font-semibold text-slate-700">{user?.name || user?.email}</span> ({user?.email})
+          </p>
+        </div>
 
-      {/* Security notice */}
-      <div className="mb-6 flex items-center gap-2 px-4 py-3 bg-slate-50 border border-slate-200 rounded-lg text-xs text-slate-500">
-        <BookOpen className="h-4 w-4 shrink-0 text-indigo-500" />
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={fetchDashboardData}
+            disabled={isLoading}
+            className="flex items-center gap-1.5 px-3 py-2 text-xs font-semibold text-slate-700 bg-white border border-slate-200 rounded-lg hover:bg-slate-50 shadow-xs transition-colors"
+          >
+            <RefreshCw className={`w-3.5 h-3.5 ${isLoading ? 'animate-spin text-indigo-600' : 'text-slate-500'}`} />
+            Refresh
+          </button>
+        </div>
+      </div>
+
+      {/* Role Boundary / Financial Isolation Notice */}
+      <div className="flex items-center gap-2 px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-600 shadow-xs">
+        <ShieldCheck className="w-4 h-4 text-indigo-600 shrink-0" />
         <span>
-          Your view is limited to academic information. Fee and financial records are not accessible to this role.
+          <strong>Trainer Access Boundary:</strong> Limited to academic schedules, batch rosters, attendance records, and student progress. Financial, fee, and payment records are strictly isolated.
         </span>
       </div>
 
-      {error && <ErrorMessage message={error} className="mb-6" />}
+      {/* Primary Dashboard Navigation Tabs */}
+      <div className="border-b border-slate-200 bg-white rounded-xl shadow-xs px-2 pt-2 border">
+        <nav className="flex space-x-1 sm:space-x-4 overflow-x-auto" aria-label="Trainer Tabs">
+          {TABS.map((tab) => {
+            const Icon = tab.icon;
+            const isActive = currentTab === tab.id;
 
-      {/* KPI strip */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 gap-4 mb-8">
-        {[
-          { label: 'Assigned Batches', value: batches.length, icon: CalendarDays, color: 'text-indigo-600', bg: 'bg-indigo-50' },
-          {
-            label: 'Active Batches',
-            value: batches.filter((b) => b.status === 'active').length,
-            icon: Users,
-            color: 'text-emerald-600',
-            bg: 'bg-emerald-50',
-          },
-          {
-            label: 'Total Students',
-            value: batches.reduce((acc, b) => acc + (b.enrolled_students ?? 0), 0),
-            icon: Users,
-            color: 'text-sky-600',
-            bg: 'bg-sky-50',
-          },
-        ].map((k) => {
-          const Icon = k.icon;
-          return (
-            <div key={k.label} className="rounded-xl border border-slate-200/80 bg-white p-4 shadow-xs">
-              {isLoading ? (
-                <div className="animate-pulse space-y-2">
-                  <div className="h-3 bg-slate-100 rounded w-2/3" />
-                  <div className="h-7 bg-slate-100 rounded w-1/3" />
-                </div>
-              ) : (
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">{k.label}</p>
-                    <p className="mt-1 text-2xl font-bold text-slate-900">{k.value}</p>
-                  </div>
-                  <div className={`p-2.5 rounded-xl ${k.bg} ${k.color}`}>
-                    <Icon className="h-5 w-5" />
-                  </div>
-                </div>
-              )}
-            </div>
-          );
-        })}
+            // Optional counts badges on tabs
+            let countBadge = null;
+            if (overviewData) {
+              if (tab.id === 'schedule' && overviewData.today_classes_count > 0) {
+                countBadge = overviewData.today_classes_count;
+              } else if (tab.id === 'batches' && overviewData.assigned_batches_count > 0) {
+                countBadge = overviewData.assigned_batches_count;
+              } else if (tab.id === 'attendance' && overviewData.attendance_pending_today_count > 0) {
+                countBadge = overviewData.attendance_pending_today_count;
+              }
+            }
+
+            return (
+              <button
+                key={tab.id}
+                onClick={() => handleTabChange(tab.id)}
+                className={`flex items-center gap-2 py-3 px-3 sm:px-4 border-b-2 text-xs sm:text-sm font-semibold transition-all whitespace-nowrap rounded-t-lg ${
+                  isActive
+                    ? 'border-indigo-600 text-indigo-600 bg-indigo-50/50'
+                    : 'border-transparent text-slate-500 hover:text-slate-800 hover:bg-slate-50 hover:border-slate-300'
+                }`}
+              >
+                <Icon className={`w-4 h-4 ${isActive ? 'text-indigo-600' : 'text-slate-400'}`} />
+                <span>{tab.label}</span>
+                {countBadge !== null && (
+                  <span
+                    className={`text-[10px] px-1.5 py-0.5 rounded-full font-bold ${
+                      tab.id === 'attendance' && overviewData?.attendance_pending_today_count > 0
+                        ? 'bg-amber-100 text-amber-700'
+                        : isActive
+                        ? 'bg-indigo-100 text-indigo-700'
+                        : 'bg-slate-100 text-slate-600'
+                    }`}
+                  >
+                    {countBadge}
+                  </span>
+                )}
+              </button>
+            );
+          })}
+        </nav>
       </div>
 
-      {/* Batch grid */}
-      <div className="rounded-xl border border-slate-200 bg-white shadow-xs overflow-hidden">
-        <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between">
-          <h2 className="text-sm font-bold text-slate-900">Assigned Batches</h2>
-          <Button size="sm" variant="outline" onClick={() => navigate('/batches')}>
-            View Full Schedule
-          </Button>
-        </div>
-        <div className="p-4">
-          {isLoading ? (
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              {[1, 2, 3, 4].map((i) => (
-                <div key={i} className="h-24 bg-slate-100 rounded-lg animate-pulse" />
-              ))}
-            </div>
-          ) : batches.length > 0 ? (
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              {batches.map((b) => (
-                <BatchCard key={b.id} batch={b} />
-              ))}
-            </div>
-          ) : (
-            <EmptyState
-              title="No batches assigned"
-              description="You have not been assigned to any batches yet."
-            />
-          )}
-        </div>
+      {/* Tab Content Display */}
+      <div>
+        {currentTab === 'overview' && (
+          <TrainerOverviewView
+            overview={overviewData}
+            schedule={scheduleData}
+            isLoading={isLoading}
+            onNavigateTab={handleTabChange}
+            onSelectSessionForAttendance={handleSelectSessionForAttendance}
+          />
+        )}
+
+        {currentTab === 'schedule' && (
+          <TrainerScheduleView
+            onSelectSessionForAttendance={handleSelectSessionForAttendance}
+          />
+        )}
+
+        {currentTab === 'batches' && (
+          <TrainerBatchesView
+            onSelectStudentForAccount={handleSelectStudentForAccount}
+            onSelectStudentForProgress={handleSelectStudentForProgress}
+            onNavigateTab={handleTabChange}
+          />
+        )}
+
+        {currentTab === 'attendance' && (
+          <TrainerAttendanceView
+            preselectedSession={preselectedSession}
+          />
+        )}
+
+        {currentTab === 'history' && (
+          <TrainerAttendanceHistoryView />
+        )}
+
+        {currentTab === 'progress' && (
+          <TrainerStudentProgressView
+            preselectedStudentId={preselectedStudentId}
+            preselectedBatchId={preselectedBatchId}
+          />
+        )}
       </div>
 
-      {/* Today's schedule — demo placeholder */}
-      <div className="mt-6 rounded-xl border border-sky-100 bg-sky-50/60 p-5 shadow-xs">
-        <div className="flex items-center gap-2 mb-3">
-          <CalendarDays className="h-4 w-4 text-sky-600" />
-          <h2 className="text-sm font-bold text-slate-900">Today's Classes</h2>
-          <Badge variant="info">Demo Data</Badge>
-        </div>
-        <div className="space-y-2">
-          <div className="flex items-center justify-between bg-white rounded-lg px-4 py-2.5 border border-sky-100 text-sm">
-            <span className="font-medium text-slate-800">Python Full Stack — Batch A</span>
-            <span className="text-xs text-sky-600 font-medium">10:00 AM – 12:00 PM</span>
-          </div>
-          <div className="flex items-center justify-between bg-white rounded-lg px-4 py-2.5 border border-sky-100 text-sm">
-            <span className="font-medium text-slate-800">React Advanced — Batch C</span>
-            <span className="text-xs text-sky-600 font-medium">2:00 PM – 4:00 PM</span>
-          </div>
-        </div>
-        <p className="mt-3 text-[11px] text-slate-400">
-          ⚠ Class schedule shown above is demo data — real scheduling requires Phase 4 timetable integration.
-        </p>
-      </div>
+      {/* Global Student Account Creation & Activation Modal */}
+      {accountModalStudent && (
+        <StudentAccountModal
+          isOpen={!!accountModalStudent}
+          onClose={() => setAccountModalStudent(null)}
+          student={accountModalStudent}
+          onAccountCreated={() => {
+            fetchDashboardData();
+          }}
+        />
+      )}
     </div>
   );
 }

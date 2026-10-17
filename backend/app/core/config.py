@@ -10,6 +10,7 @@ class Settings(BaseSettings):
     SECRET_KEY: str = "default_secret_key_change_in_production"
     ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 60
+    INSTITUTE_TIMEZONE: str = "Asia/Kolkata"
 
     DATABASE_URL: str = "postgresql+asyncpg://edupilot_user:edupilot_password@localhost:5432/edupilot"
 

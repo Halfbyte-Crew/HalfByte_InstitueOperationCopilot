@@ -102,6 +102,12 @@ class Student(Base, UUIDPrimaryKeyMixin, TimestampMixin):
     payment_transactions: Mapped[List["PaymentTransaction"]] = relationship(
         "PaymentTransaction", back_populates="student", cascade="all, delete-orphan"
     )
+    account: Mapped[Optional["StudentAccount"]] = relationship(
+        "StudentAccount", back_populates="student", uselist=False, cascade="all, delete-orphan"
+    )
+    observations: Mapped[List["AcademicObservation"]] = relationship(
+        "AcademicObservation", back_populates="student", cascade="all, delete-orphan"
+    )
 
 
 class Trainer(Base, UUIDPrimaryKeyMixin, TimestampMixin):
@@ -487,4 +493,51 @@ class InteractionLog(Base, UUIDPrimaryKeyMixin, TimestampMixin):
     enquiry: Mapped[Optional["Enquiry"]] = relationship("Enquiry", back_populates="interactions")
     admission: Mapped[Optional["Admission"]] = relationship("Admission", back_populates="interactions")
     student: Mapped[Optional["Student"]] = relationship("Student")
+
+
+# ---------------------------------------------------------
+# Trainer & Student Academic Operations Models
+# ---------------------------------------------------------
+
+class StudentAccount(Base, UUIDPrimaryKeyMixin, TimestampMixin):
+    """Student user login credentials and activation state."""
+    __tablename__ = "student_accounts"
+
+    student_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("students.id", ondelete="CASCADE"), unique=True, nullable=False, index=True
+    )
+    email: Mapped[str] = mapped_column(String(255), unique=True, nullable=False, index=True)
+    password_hash: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    is_active: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    account_status: Mapped[str] = mapped_column(
+        String(50), default="pending_activation", nullable=False, index=True
+    )  # pending_activation, active, suspended
+    activation_token_hash: Mapped[Optional[str]] = mapped_column(String(255), nullable=True, index=True)
+    activation_token_expires_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    activated_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    created_by_trainer_email: Mapped[str] = mapped_column(String(255), nullable=False)
+    last_login_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+
+    # Relationships
+    student: Mapped["Student"] = relationship("Student", back_populates="account")
+
+
+class AcademicObservation(Base, UUIDPrimaryKeyMixin, TimestampMixin):
+    """Academic progress observation or feedback logged by a trainer for a student."""
+    __tablename__ = "academic_observations"
+
+    student_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("students.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    batch_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("batches.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    trainer_email: Mapped[str] = mapped_column(String(255), nullable=False, index=True)
+    trainer_name: Mapped[str] = mapped_column(String(150), nullable=False)
+    observation_type: Mapped[str] = mapped_column(String(50), default="Feedback", nullable=False)  # Feedback, Milestone, Concern, Commendation
+    note: Mapped[str] = mapped_column(Text, nullable=False)
+
+    # Relationships
+    student: Mapped["Student"] = relationship("Student", back_populates="observations")
+    batch: Mapped["Batch"] = relationship("Batch")
 

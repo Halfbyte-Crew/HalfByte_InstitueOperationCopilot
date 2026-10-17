@@ -3,6 +3,7 @@ import { createBrowserRouter, Navigate } from 'react-router-dom';
 
 // Auth
 import { LoginPage } from '../features/auth/pages/LoginPage';
+import { StudentActivationPage } from '../features/auth/pages/StudentActivationPage';
 
 // Layouts
 import { DashboardLayout } from '../layouts/DashboardLayout';
@@ -58,6 +59,10 @@ export const router = createBrowserRouter([
   {
     path: '/login',
     element: <LoginPage />,
+  },
+  {
+    path: '/activate',
+    element: <StudentActivationPage />,
   },
 
   // ── Role-specific dashboards ──────────────────────────────────────────────

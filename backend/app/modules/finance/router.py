@@ -511,13 +511,21 @@ async def list_payment_records(
 ):
     """
     Searchable and filterable payment transaction history.
+    Enables accountant staff to audit receipts, search across students,
+    and filter by reconciliation state and date ranges.
     """
+    # ── 1. Base Query Construction ──────────────────────────────────────────
+    # Join PaymentTransaction with Student (required) and FeeInstallment (outer join,
+    # as some payments may be general advance credits or registration fees).
     stmt = (
         select(PaymentTransaction, Student, FeeInstallment)
         .join(Student, PaymentTransaction.student_id == Student.id)
         .outerjoin(FeeInstallment, PaymentTransaction.installment_id == FeeInstallment.id)
     )
 
+    # ── 2. Dynamic Text Search ──────────────────────────────────────────────
+    # Supports partial substring matching across student name, student email,
+    # official receipt number, and bank/UPI reference numbers.
     if search and search.strip():
         term = f"%{search.strip().lower()}%"
         stmt = stmt.where(
@@ -529,6 +537,8 @@ async def list_payment_records(
             )
         )
 
+    # ── 3. Payment Method & Reconciliation Filters ──────────────────────────
+    # Normalize input strings to match stored casing (e.g. 'upi' vs 'UPI', 'bank_transfer')
     if payment_method and payment_method.strip().lower() != "all":
         pm_clean = payment_method.strip().lower().replace("_", " ")
         stmt = stmt.where(
@@ -541,20 +551,27 @@ async def list_payment_records(
     if reconciliation_status and reconciliation_status.strip().lower() != "all":
         stmt = stmt.where(func.lower(PaymentTransaction.reconciliation_status) == reconciliation_status.strip().lower())
 
+    # ── 4. Date Range Filters ───────────────────────────────────────────────
     if start_date:
         stmt = stmt.where(PaymentTransaction.payment_date >= start_date)
     if end_date:
         stmt = stmt.where(PaymentTransaction.payment_date <= end_date)
 
+    # Sort in reverse chronological order so recent transactions appear first
     stmt = stmt.order_by(PaymentTransaction.payment_date.desc(), PaymentTransaction.created_at.desc())
 
+    # ── 5. Efficient Total Count Subquery ────────────────────────────────────
+    # Computes the total matching records before applying pagination limit/offset
     count_stmt = select(func.count()).select_from(stmt.subquery())
     total_count = (await db.execute(count_stmt)).scalar() or 0
 
+    # ── 6. Paginated Result Retrieval ────────────────────────────────────────
     offset = (page - 1) * page_size
     stmt = stmt.offset(offset).limit(page_size)
     rows = (await db.execute(stmt)).all()
 
+    # ── 7. Response DTO Serialization ────────────────────────────────────────
+    # Maps SQLAlchemy tuple rows into typed Pydantic response models
     items: List[PaymentTransactionResponse] = []
     for r in rows:
         tx: PaymentTransaction = r[0]
@@ -587,6 +604,8 @@ async def list_payment_records(
                 created_at=tx.created_at,
             )
         )
+
+    # Return paginated response payload with metadata
 
     return PaymentTransactionsListResponse(
         items=items,

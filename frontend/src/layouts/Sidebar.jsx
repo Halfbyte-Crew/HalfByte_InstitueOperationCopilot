@@ -19,6 +19,9 @@ import {
   Receipt,
   CheckCircle,
   FileText,
+  Calendar,
+  Clock,
+  TrendingUp,
 } from 'lucide-react';
 import { getNavItems } from '../utils/rbac';
 import { useAuth } from '../app/providers';
@@ -29,6 +32,7 @@ const ICON_MAP = {
   Users,
   BookOpen,
   CalendarDays,
+  Calendar,
   UserCheck,
   ClipboardCheck,
   CreditCard,
@@ -38,6 +42,9 @@ const ICON_MAP = {
   Receipt,
   CheckCircle,
   FileText,
+  Clock,
+  TrendingUp,
+  GraduationCap,
 };
 
 /** Role label displayed in the sidebar header. */
