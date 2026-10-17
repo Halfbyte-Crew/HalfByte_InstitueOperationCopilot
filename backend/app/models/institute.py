@@ -1,14 +1,17 @@
 import enum
 import uuid
-from datetime import date
+from datetime import date, datetime
 from decimal import Decimal
-from typing import List, Optional
+from typing import List, Optional, Any, Dict
 from sqlalchemy import (
+    Boolean,
     CheckConstraint,
     Date,
+    DateTime,
     Enum as SAEnum,
     ForeignKey,
     Integer,
+    JSON,
     Numeric,
     String,
     Text,
@@ -57,6 +60,13 @@ class FeeStatus(str, enum.Enum):
     PARTIALLY_PAID = "Partially Paid"
     OVERDUE = "Overdue"
     WAIVED = "Waived"
+
+
+class ClassScheduleStatus(str, enum.Enum):
+    SCHEDULED = "Scheduled"
+    IN_PROGRESS = "In Progress"
+    COMPLETED = "Completed"
+    CANCELLED = "Cancelled"
 
 
 # ---------------------------------------------------------
@@ -151,6 +161,9 @@ class Batch(Base, UUIDPrimaryKeyMixin, TimestampMixin):
     fee_installments: Mapped[List["FeeInstallment"]] = relationship(
         "FeeInstallment", back_populates="batch"
     )
+    schedules: Mapped[List["ClassSchedule"]] = relationship(
+        "ClassSchedule", back_populates="batch", cascade="all, delete-orphan"
+    )
 
 
 class BatchEnrollment(Base, UUIDPrimaryKeyMixin, TimestampMixin):
@@ -236,3 +249,61 @@ class FeeInstallment(Base, UUIDPrimaryKeyMixin, TimestampMixin):
     # Relationships
     student: Mapped["Student"] = relationship("Student", back_populates="fee_installments")
     batch: Mapped[Optional["Batch"]] = relationship("Batch", back_populates="fee_installments")
+
+
+class ClassSchedule(Base, UUIDPrimaryKeyMixin, TimestampMixin):
+    """Scheduled class/session for a batch, assigned to a trainer and room/link."""
+    __tablename__ = "class_schedules"
+
+    batch_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("batches.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    trainer_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+        ForeignKey("trainers.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    title: Mapped[str] = mapped_column(String(200), nullable=False)
+    scheduled_date: Mapped[date] = mapped_column(Date, nullable=False, index=True)
+    start_time: Mapped[str] = mapped_column(String(10), nullable=False)  # HH:MM
+    end_time: Mapped[str] = mapped_column(String(10), nullable=False)    # HH:MM
+    classroom: Mapped[Optional[str]] = mapped_column(String(100), nullable=True, index=True)
+    meeting_link: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    status: Mapped[ClassScheduleStatus] = mapped_column(
+        SAEnum(ClassScheduleStatus, name="class_schedule_status_enum", native_enum=False),
+        default=ClassScheduleStatus.SCHEDULED,
+        nullable=False,
+        index=True,
+    )
+
+    # Relationships
+    batch: Mapped["Batch"] = relationship("Batch", back_populates="schedules")
+    trainer: Mapped[Optional["Trainer"]] = relationship("Trainer")
+
+
+class StaffMember(Base, UUIDPrimaryKeyMixin, TimestampMixin):
+    """Institute personnel directory record."""
+    __tablename__ = "staff_members"
+
+    name: Mapped[str] = mapped_column(String(150), nullable=False, index=True)
+    email: Mapped[str] = mapped_column(String(255), unique=True, nullable=False, index=True)
+    phone: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
+    role: Mapped[str] = mapped_column(String(50), nullable=False, default="coordinator", index=True)
+    department: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+
+
+class ApprovalRequest(Base, UUIDPrimaryKeyMixin, TimestampMixin):
+    """Administrative approval requests."""
+    __tablename__ = "approval_requests"
+
+    request_type: Mapped[str] = mapped_column(String(100), nullable=False, index=True)
+    title: Mapped[str] = mapped_column(String(255), nullable=False)
+    description: Mapped[str] = mapped_column(Text, nullable=False)
+    requester_name: Mapped[str] = mapped_column(String(150), nullable=False)
+    requester_email: Mapped[str] = mapped_column(String(255), nullable=False)
+    requester_role: Mapped[str] = mapped_column(String(50), nullable=False)
+    status: Mapped[str] = mapped_column(String(50), default="Pending", nullable=False, index=True)
+    rejection_reason: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    reviewed_by: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    reviewed_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    payload: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)
+

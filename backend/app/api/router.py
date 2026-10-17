@@ -11,11 +11,13 @@ from app.modules.approvals.router import router as approvals_router
 from app.modules.audit.router import router as audit_router
 from app.modules.dashboard.router import router as dashboard_router
 from app.modules.rag.router import router as rag_router
+from app.modules.staff.router import router as staff_router
 
 api_router = APIRouter()
 
 api_router.include_router(auth_router)
 api_router.include_router(dashboard_router)
+api_router.include_router(staff_router)
 api_router.include_router(students_router)
 api_router.include_router(courses_router)
 api_router.include_router(batches_router)

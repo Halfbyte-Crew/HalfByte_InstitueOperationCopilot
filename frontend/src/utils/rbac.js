@@ -39,16 +39,11 @@ export function getDashboardPath(role) {
 // Icons are imported dynamically in Sidebar.jsx to keep this file icon-free.
 export const NAV_CONFIG = {
   [ROLES.SUPER_ADMIN]: [
-    { name: 'Dashboard', path: '/dashboard/owner', iconName: 'LayoutDashboard' },
-    { name: 'Students', path: '/students', iconName: 'Users' },
-    { name: 'Courses', path: '/courses', iconName: 'BookOpen' },
-    { name: 'Batches', path: '/batches', iconName: 'CalendarDays' },
-    { name: 'Trainers', path: '/trainers', iconName: 'UserCheck' },
-    { name: 'Attendance', path: '/attendance', iconName: 'ClipboardCheck' },
-    { name: 'Fees & Invoicing', path: '/fees', iconName: 'CreditCard' },
-    { name: 'AI Copilot', path: '/copilot', iconName: 'Bot', badge: 'AI' },
-    { name: 'Action Approvals', path: '/approvals', iconName: 'CheckSquare' },
-    { name: 'Audit History', path: '/audit', iconName: 'ShieldCheck' },
+    { name: 'Overview', path: '/dashboard/owner', iconName: 'LayoutDashboard' },
+    { name: 'AI Knowledge Assistant', path: '/copilot', iconName: 'Bot', badge: 'AI' },
+    { name: 'Operations & Scheduling', path: '/operations', iconName: 'CalendarDays' },
+    { name: 'Staff Management', path: '/staff', iconName: 'Users' },
+    { name: 'Approvals', path: '/approvals', iconName: 'CheckSquare' },
   ],
   get [ROLES.ADMIN]() { return this[ROLES.SUPER_ADMIN]; },
 
