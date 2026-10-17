@@ -143,18 +143,22 @@ class DocumentExtractor:
         if not text:
             raise DocumentExtractionError(f"Markdown file '{filename}' contains no readable text.")
 
-        # 1. Detect title from first top-level `# Heading` if present
+        # 1. Detect title from first top-level `# Heading` and `## Subheading` if present
         title = override_title
         lines = text.splitlines()
         first_h1 = None
+        first_h2 = None
         for line in lines:
             line_str = line.strip()
-            if line_str.startswith("# "):
+            if line_str.startswith("# ") and not first_h1:
                 first_h1 = line_str[2:].strip()
-                break
+            elif line_str.startswith("## ") and not first_h2 and not line_str.lower().startswith("## page"):
+                first_h2 = line_str[3:].strip()
 
         if not title:
-            if first_h1:
+            if first_h1 and first_h2 and ("edupilot" in first_h1.lower() or "knowledge base" in first_h1.lower()):
+                title = f"{first_h1}: {first_h2}"
+            elif first_h1:
                 title = first_h1
             else:
                 base_name = filename.rsplit(".", 1)[0]

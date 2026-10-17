@@ -48,11 +48,12 @@ export const NAV_CONFIG = {
   get [ROLES.ADMIN]() { return this[ROLES.SUPER_ADMIN]; },
 
   [ROLES.COUNSELOR]: [
-    { name: 'Dashboard', path: '/dashboard/counselor', iconName: 'LayoutDashboard' },
-    { name: 'Students', path: '/students', iconName: 'Users' },
-    { name: 'Courses', path: '/courses', iconName: 'BookOpen' },
-    { name: 'Batches', path: '/batches', iconName: 'CalendarDays' },
-    { name: 'Attendance', path: '/attendance', iconName: 'ClipboardCheck' },
+    { name: 'Overview', path: '/dashboard/counselor', iconName: 'LayoutDashboard' },
+    { name: 'My Enquiries', path: '/dashboard/counselor?tab=enquiries', iconName: 'UserCheck' },
+    { name: 'My Students', path: '/dashboard/counselor?tab=students', iconName: 'Users' },
+    { name: 'Follow-ups', path: '/dashboard/counselor?tab=followups', iconName: 'ClipboardCheck' },
+    { name: 'Admissions', path: '/dashboard/counselor?tab=admissions', iconName: 'CheckSquare' },
+    { name: 'AI Knowledge Bot', path: '/copilot', iconName: 'Bot', badge: 'AI' },
   ],
   get [ROLES.COORDINATOR]() { return this[ROLES.COUNSELOR]; },
 

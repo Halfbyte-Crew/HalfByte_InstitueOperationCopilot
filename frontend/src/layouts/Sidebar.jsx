@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { NavLink } from 'react-router-dom';
+import { NavLink, useLocation } from 'react-router-dom';
 import {
   LayoutDashboard,
   Users,
@@ -48,6 +48,7 @@ const ROLE_LABEL = {
 export function Sidebar({ userRole = 'super_admin' }) {
   const navItems = getNavItems(userRole);
   const { user, logout } = useAuth();
+  const location = useLocation();
   const [showSettingsModal, setShowSettingsModal] = useState(false);
 
   return (
@@ -72,17 +73,20 @@ export function Sidebar({ userRole = 'super_admin' }) {
         </div>
         {navItems.map((item) => {
           const Icon = ICON_MAP[item.iconName] ?? LayoutDashboard;
+          const currentUrl = location.pathname + location.search;
+          const isItemActive = item.path.includes('?')
+            ? currentUrl === item.path
+            : location.pathname === item.path && (!location.search || !navItems.some((n) => n.path === currentUrl));
+
           return (
             <NavLink
               key={item.path}
               to={item.path}
-              className={({ isActive }) =>
-                `flex items-center justify-between px-3 py-2 rounded-lg text-sm font-medium transition-all duration-150 ${
-                  isActive
-                    ? 'bg-indigo-600 text-white shadow-xs'
-                    : 'text-slate-300 hover:bg-slate-800 hover:text-white'
-                }`
-              }
+              className={`flex items-center justify-between px-3 py-2 rounded-lg text-sm font-medium transition-all duration-150 ${
+                isItemActive
+                  ? 'bg-indigo-600 text-white shadow-xs'
+                  : 'text-slate-300 hover:bg-slate-800 hover:text-white'
+              }`}
             >
               <div className="flex items-center gap-3">
                 <Icon className="h-4 w-4 shrink-0" />

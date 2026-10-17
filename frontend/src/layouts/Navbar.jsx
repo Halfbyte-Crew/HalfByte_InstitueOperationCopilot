@@ -26,6 +26,42 @@ export function Navbar() {
       } catch (e) {
         // quiet fallback
       }
+    } else if (user?.role === 'counselor' || user?.role === 'coordinator') {
+      try {
+        const summary = await dashboardApi.getCounselorSummary().catch(() => null);
+        const counselorAlerts = [];
+        if (summary?.follow_ups_overdue_count > 0) {
+          counselorAlerts.push({
+            id: 'overdue-tasks',
+            severity: 'CRITICAL',
+            title: `${summary.follow_ups_overdue_count} Overdue Follow-up Tasks`,
+            explanation: 'You have overdue tasks requiring immediate contact.',
+            action_link: '/dashboard/counselor?tab=followups&filter=overdue',
+          });
+        }
+        if (summary?.follow_ups_due_today_count > 0) {
+          counselorAlerts.push({
+            id: 'due-today-tasks',
+            severity: 'HIGH',
+            title: `${summary.follow_ups_due_today_count} Tasks Due Today`,
+            explanation: 'Follow-ups scheduled for today.',
+            action_link: '/dashboard/counselor?tab=followups&filter=due_today',
+          });
+        }
+        if (summary?.active_admissions_count > 0) {
+          counselorAlerts.push({
+            id: 'active-admissions',
+            severity: 'NORMAL',
+            title: `${summary.active_admissions_count} Active Applications In Progress`,
+            explanation: 'Pipeline applications requiring review or documentation.',
+            action_link: '/dashboard/counselor?tab=admissions',
+          });
+        }
+        setAlerts(counselorAlerts);
+        setPendingApprovalsCount(0);
+      } catch (e) {
+        // quiet fallback
+      }
     }
   };
 
