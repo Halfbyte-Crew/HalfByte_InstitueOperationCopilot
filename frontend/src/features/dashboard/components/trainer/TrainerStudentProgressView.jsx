@@ -229,7 +229,7 @@ export function TrainerStudentProgressView({ preselectedStudentId, preselectedBa
             <div className="bg-white rounded-xl border border-slate-200 shadow-2xs p-6 space-y-4">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
-                  <Award className="w-5 h-5 text-purple-600" />
+                  <Award className="w-5 h-5 text-amber-600" />
                   <h4 className="font-bold text-slate-900 text-sm">Faculty Academic Observations</h4>
                 </div>
                 <button
@@ -253,7 +253,7 @@ export function TrainerStudentProgressView({ preselectedStudentId, preselectedBa
                       className="p-3.5 bg-slate-50/80 rounded-xl border border-slate-200/70 space-y-1.5"
                     >
                       <div className="flex items-center justify-between text-2xs">
-                        <span className="font-bold text-purple-800 bg-purple-50 px-2 py-0.5 rounded border border-purple-200">
+                        <span className="font-bold text-amber-800 bg-amber-50 px-2 py-0.5 rounded border border-amber-200">
                           {obs.observation_type}
                         </span>
                         <span className="text-slate-400">

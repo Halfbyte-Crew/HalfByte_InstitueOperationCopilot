@@ -296,6 +296,28 @@ export function StudentActivationPage() {
             </div>
           )}
         </div>
+
+        {/* Footer with Privacy Policy & Terms Links */}
+        <div className="mt-6 text-center space-y-1">
+          <div className="flex items-center justify-center gap-4 text-xs text-indigo-200/80">
+            <Link
+              to="/privacy"
+              className="hover:text-white transition-colors underline-offset-4 hover:underline"
+            >
+              Privacy Policy
+            </Link>
+            <span>&bull;</span>
+            <Link
+              to="/terms"
+              className="hover:text-white transition-colors underline-offset-4 hover:underline"
+            >
+              Terms &amp; Conditions
+            </Link>
+          </div>
+          <div className="text-[11px] text-slate-400">
+            EduPilot Institute Operations Platform &copy; 2026
+          </div>
+        </div>
       </div>
     </div>
   );

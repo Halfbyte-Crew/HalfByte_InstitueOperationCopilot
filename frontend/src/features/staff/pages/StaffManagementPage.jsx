@@ -32,7 +32,7 @@ const ROLE_BADGE = {
   admin: 'bg-indigo-100 text-indigo-800 border-indigo-200',
   counselor: 'bg-emerald-100 text-emerald-800 border-emerald-200',
   coordinator: 'bg-sky-100 text-sky-800 border-sky-200',
-  trainer: 'bg-purple-100 text-purple-800 border-purple-200',
+  trainer: 'bg-teal-100 text-teal-800 border-teal-200',
   finance: 'bg-amber-100 text-amber-800 border-amber-200',
 };
 

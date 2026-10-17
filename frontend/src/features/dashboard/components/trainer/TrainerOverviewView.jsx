@@ -69,9 +69,9 @@ export function TrainerOverviewView({
             label: 'Total Students',
             value: overview?.total_students ?? 0,
             icon: Users,
-            color: 'text-purple-600',
-            bg: 'bg-purple-50',
-            border: 'hover:border-purple-200',
+            color: 'text-teal-600',
+            bg: 'bg-teal-50',
+            border: 'hover:border-teal-200',
             onClick: () => onNavigateTab('batches'),
           },
           {

@@ -25,7 +25,7 @@ import { approvalsApi } from '../approvalsApi';
 const TYPE_STYLE = {
   BATCH_TRANSFER: 'bg-indigo-100 text-indigo-800 border-indigo-200',
   FEE_CONCESSION: 'bg-emerald-100 text-emerald-800 border-emerald-200',
-  LEAVE_REQUEST: 'bg-purple-100 text-purple-800 border-purple-200',
+  LEAVE_REQUEST: 'bg-teal-100 text-teal-800 border-teal-200',
   SCHEDULE_CHANGE: 'bg-amber-100 text-amber-800 border-amber-200',
   ATTENDANCE_CORRECTION: 'bg-sky-100 text-sky-800 border-sky-200',
 };

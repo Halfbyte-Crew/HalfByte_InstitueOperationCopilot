@@ -5,6 +5,10 @@ import { createBrowserRouter, Navigate } from 'react-router-dom';
 import { LoginPage } from '../features/auth/pages/LoginPage';
 import { StudentActivationPage } from '../features/auth/pages/StudentActivationPage';
 
+// Legal & Compliance
+import { PrivacyPolicyPage } from '../features/legal/pages/PrivacyPolicyPage';
+import { TermsConditionsPage } from '../features/legal/pages/TermsConditionsPage';
+
 // Layouts
 import { DashboardLayout } from '../layouts/DashboardLayout';
 import { RoleGuard } from '../layouts/RoleGuard';
@@ -63,6 +67,22 @@ export const router = createBrowserRouter([
   {
     path: '/activate',
     element: <StudentActivationPage />,
+  },
+  {
+    path: '/privacy',
+    element: <PrivacyPolicyPage />,
+  },
+  {
+    path: '/privacy-policy',
+    element: <PrivacyPolicyPage />,
+  },
+  {
+    path: '/terms',
+    element: <TermsConditionsPage />,
+  },
+  {
+    path: '/terms-and-conditions',
+    element: <TermsConditionsPage />,
   },
 
   // ── Role-specific dashboards ──────────────────────────────────────────────

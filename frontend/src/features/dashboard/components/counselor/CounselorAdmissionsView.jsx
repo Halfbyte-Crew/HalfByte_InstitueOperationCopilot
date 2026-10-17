@@ -45,7 +45,7 @@ const PIPELINE_STAGES = [
 const STAGE_COLORS = {
   'New Enquiry': 'bg-sky-50 text-sky-700 border-sky-200',
   'Contacted': 'bg-blue-50 text-blue-700 border-blue-200',
-  'Counseling Scheduled': 'bg-purple-50 text-purple-700 border-purple-200',
+  'Counseling Scheduled': 'bg-cyan-50 text-cyan-700 border-cyan-200',
   'Application Started': 'bg-indigo-50 text-indigo-700 border-indigo-200',
   'Documents Pending': 'bg-amber-50 text-amber-700 border-amber-200',
   'Documents Under Review': 'bg-orange-50 text-orange-700 border-orange-200',

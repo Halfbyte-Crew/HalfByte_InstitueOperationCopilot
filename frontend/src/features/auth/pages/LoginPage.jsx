@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate, useLocation } from 'react-router-dom';
+import { useNavigate, useLocation, Link } from 'react-router-dom';
 import { useAuth } from '../../../app/providers';
 import { authApi } from '../authApi';
 import { Input } from '../../../components/ui/Input';
@@ -52,10 +52,10 @@ export function LoginPage() {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-slate-900 p-4 relative overflow-hidden">
-      {/* Background visual accents */}
+    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-950 via-slate-900 to-indigo-950 p-4 relative overflow-hidden">
+      {/* Background visual accents — refined Indigo and Sky glow, no purple */}
       <div className="absolute -top-40 -right-40 w-96 h-96 bg-indigo-600/20 rounded-full blur-3xl pointer-events-none" />
-      <div className="absolute -bottom-40 -left-40 w-96 h-96 bg-purple-600/20 rounded-full blur-3xl pointer-events-none" />
+      <div className="absolute -bottom-40 -left-40 w-96 h-96 bg-sky-600/20 rounded-full blur-3xl pointer-events-none" />
 
       <div className="w-full max-w-md space-y-4 relative z-10">
         {/* Main login card */}
@@ -111,8 +111,26 @@ export function LoginPage() {
           </div>
         </div>
 
-        <div className="text-center text-xs text-slate-400">
-          EduPilot Institute Operations Platform &copy; 2026
+        {/* Footer with Privacy Policy & Terms Links */}
+        <div className="space-y-2 text-center">
+          <div className="flex items-center justify-center gap-4 text-xs text-slate-400">
+            <Link
+              to="/privacy"
+              className="hover:text-indigo-300 transition-colors underline-offset-4 hover:underline"
+            >
+              Privacy Policy
+            </Link>
+            <span>&bull;</span>
+            <Link
+              to="/terms"
+              className="hover:text-indigo-300 transition-colors underline-offset-4 hover:underline"
+            >
+              Terms &amp; Conditions
+            </Link>
+          </div>
+          <div className="text-[11px] text-slate-500">
+            EduPilot Institute Operations Platform &copy; 2026
+          </div>
         </div>
       </div>
     </div>
