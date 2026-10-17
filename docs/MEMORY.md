@@ -96,3 +96,16 @@
   - Phase 4 / Student linking: Add `user_id` FK to `Student` model and filter student dashboard by authenticated user.
   - Attendance daily roster marking UI (Trainer → mark batch attendance).
   - Fee receipts / invoice exports (Accounts dashboard).
+
+## 4. College Knowledge Assistant — RAG Architecture
+
+- **Sprint 4 Completed: RAG Knowledge Base & Chatbot Pipeline**
+  - **Document Extraction (`DocumentExtractor`)**: Page-aware parser supporting both `.pdf` (PyMuPDF) and `.md` (Markdown). Parses explicit `## Page X` markers, numbered sections (`**1. Heading**`), and strips embedded base64 images.
+  - **Page-Preserving Chunking (`DocumentChunker`)**: Sliding window overlap chunker strictly binding each chunk to source physical page number for citations.
+  - **Embeddings (`EmbeddingService`)**: Supports Ollama `qwen3-embedding:4b` (`ollama>=0.2.0`) with offline deterministic test fallback.
+  - **Vector Storage (`VectorStore`)**: Stored in PostgreSQL `knowledge_documents` and `document_chunks` with JSON embedding vector lists and NumPy cosine similarity search.
+  - **Retriever (`KnowledgeRetriever`)**: Top-K retrieval with role-based access filtering (e.g. students cannot retrieve restricted faculty payroll policies).
+  - **Grounded Answer Generator (`GroundedAnswerGenerator`)**: Constrained synthesis enforcing verifiable citations (`[Document Title, Page X]`) and explicit refusal when evidence is insufficient: *"The available institutional documents do not contain sufficient information to answer this question."*
+  - **FastAPI Endpoints**: `/api/v1/copilot/rag/query`, `/api/v1/copilot/rag/ingest-folder`, `/api/v1/copilot/rag/upload`, `/api/v1/copilot/rag/documents`.
+  - **CLI Ingestion**: `python scripts/ingest_knowledge_base.py` automatically scans all 10 domain folders in `knowledge_base/` and indexes them into PostgreSQL.
+  - **Frontend Integration**: [CopilotPage.jsx](file:///c:/Users/faizn/Documents/EduPilot/frontend/src/features/copilot/pages/CopilotPage.jsx) connects to live RAG endpoints, rendering real-time answers, clickable citation chips with page numbers, and quick starter prompts.

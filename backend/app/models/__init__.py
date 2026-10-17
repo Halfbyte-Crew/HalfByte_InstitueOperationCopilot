@@ -13,6 +13,10 @@ from app.models.institute import (
     StudentStatus,
     Trainer,
 )
+from app.models.rag import (
+    DocumentChunk,
+    KnowledgeDocument,
+)
 
 __all__ = [
     "Student",
@@ -27,4 +31,6 @@ __all__ = [
     "AttendanceStatus",
     "FeeInstallment",
     "FeeStatus",
+    "KnowledgeDocument",
+    "DocumentChunk",
 ]

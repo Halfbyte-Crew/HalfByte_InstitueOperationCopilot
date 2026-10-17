@@ -10,6 +10,7 @@ from app.modules.copilot.router import router as copilot_router
 from app.modules.approvals.router import router as approvals_router
 from app.modules.audit.router import router as audit_router
 from app.modules.dashboard.router import router as dashboard_router
+from app.modules.rag.router import router as rag_router
 
 api_router = APIRouter()
 
@@ -22,5 +23,6 @@ api_router.include_router(trainers_router)
 api_router.include_router(attendance_router)
 api_router.include_router(fees_router)
 api_router.include_router(copilot_router)
+api_router.include_router(rag_router)
 api_router.include_router(approvals_router)
 api_router.include_router(audit_router)
