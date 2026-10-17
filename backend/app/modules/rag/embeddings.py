@@ -85,31 +85,50 @@ class EmbeddingService:
         # 2. Resilient deterministic test vectorizer for offline/test environments
         return [self._deterministic_fallback_vector(t) for t in clean_texts]
 
+    FALLBACK_STOP_WORDS = {
+        "a", "an", "the", "and", "or", "but", "if", "because", "as", "what",
+        "which", "this", "that", "these", "those", "then", "just", "so", "than",
+        "such", "both", "through", "about", "for", "is", "of", "while", "during",
+        "to", "from", "in", "out", "on", "off", "again", "further", "then", "once",
+        "here", "there", "when", "where", "why", "how", "all", "any", "both",
+        "each", "few", "more", "most", "other", "some", "such", "no", "nor", "not",
+        "only", "own", "same", "so", "than", "too", "very", "s", "t", "can", "will",
+        "just", "don", "should", "now", "are", "do", "does", "did", "have", "has", "had"
+    }
+
     def _deterministic_fallback_vector(self, text: str) -> List[float]:
         """
         Computes a normalized, deterministic dense embedding vector from token n-grams.
         Ensures identical words produce identical vectors and semantic similarity can be tested
-        reliably even when the local Ollama server is offline.
+        reliably even when the local Ollama server is offline. Stop words are downweighted
+        to prevent spurious high similarities between unrelated texts.
         """
         vec = np.zeros(self.fallback_dim, dtype=np.float32)
-        words = text.lower().split()
+        raw_tokens = [t.strip(".,;:?!'\"()[]{}") for t in text.lower().split()]
+        words = [t for t in raw_tokens if t]
         if not words:
             return vec.tolist()
 
-        for w in words:
+        substantive_words = [w for w in words if w not in self.FALLBACK_STOP_WORDS]
+        tokens_to_process = words if not substantive_words else words
+
+        for w in tokens_to_process:
             # Hash word into bucket index
             h = int(hashlib.sha256(w.encode("utf-8")).hexdigest(), 16)
             idx = h % self.fallback_dim
             sign = 1.0 if ((h >> 8) & 1) else -1.0
-            vec[idx] += sign
+            weight = 0.05 if w in self.FALLBACK_STOP_WORDS else 1.0
+            vec[idx] += sign * weight
 
-        # Add 3-gram char hashes for sub-word matching
-        clean_str = "".join(words)
-        for i in range(max(0, len(clean_str) - 2)):
-            tri = clean_str[i : i + 3]
-            h = int(hashlib.md5(tri.encode("utf-8")).hexdigest(), 16)
-            idx = h % self.fallback_dim
-            vec[idx] += 0.5
+        # Add 3-gram char hashes for sub-word matching, prioritizing substantive words
+        words_for_ngrams = substantive_words if substantive_words else words
+        for w in words_for_ngrams:
+            if len(w) >= 3:
+                for i in range(len(w) - 2):
+                    tri = w[i : i + 3]
+                    h = int(hashlib.md5(tri.encode("utf-8")).hexdigest(), 16)
+                    idx = h % self.fallback_dim
+                    vec[idx] += 0.3
 
         # L2 normalize
         norm = np.linalg.norm(vec)

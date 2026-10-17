@@ -87,6 +87,7 @@ class Student(Base, UUIDPrimaryKeyMixin, TimestampMixin):
         index=True,
     )
     notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    assigned_counselor_email: Mapped[Optional[str]] = mapped_column(String(255), nullable=True, index=True)
 
     # Relationships
     enrollments: Mapped[List["BatchEnrollment"]] = relationship(
@@ -306,4 +307,147 @@ class ApprovalRequest(Base, UUIDPrimaryKeyMixin, TimestampMixin):
     reviewed_by: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
     reviewed_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
     payload: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)
+
+
+# ---------------------------------------------------------
+# Counselor & Admission Workflow Models
+# ---------------------------------------------------------
+
+class Enquiry(Base, UUIDPrimaryKeyMixin, TimestampMixin):
+    """Prospective student enquiry assigned to an admissions counselor."""
+    __tablename__ = "enquiries"
+
+    name: Mapped[str] = mapped_column(String(150), nullable=False, index=True)
+    email: Mapped[str] = mapped_column(String(255), nullable=False, index=True)
+    phone: Mapped[Optional[str]] = mapped_column(String(30), nullable=True)
+    course_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+        ForeignKey("courses.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    course_name: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    source: Mapped[str] = mapped_column(String(100), default="Website", nullable=False, index=True)
+    status: Mapped[str] = mapped_column(String(50), default="New", nullable=False, index=True)
+    assigned_counselor_email: Mapped[str] = mapped_column(String(255), nullable=False, index=True)
+    notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    last_contact_date: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
+    next_follow_up_date: Mapped[Optional[date]] = mapped_column(Date, nullable=True, index=True)
+    converted_to_student_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+        ForeignKey("students.id", ondelete="SET NULL"), nullable=True
+    )
+    converted_to_admission_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+        ForeignKey("admissions.id", ondelete="SET NULL", use_alter=True, name="fk_enquiries_converted_to_admission_id"), nullable=True
+    )
+    converted_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+
+    # Relationships
+    course: Mapped[Optional["Course"]] = relationship("Course")
+    student: Mapped[Optional["Student"]] = relationship("Student")
+    admission: Mapped[Optional["Admission"]] = relationship(
+        "Admission", foreign_keys=[converted_to_admission_id]
+    )
+    follow_ups: Mapped[List["CounselorTask"]] = relationship(
+        "CounselorTask", back_populates="enquiry", cascade="all, delete-orphan"
+    )
+    interactions: Mapped[List["InteractionLog"]] = relationship(
+        "InteractionLog", back_populates="enquiry", cascade="all, delete-orphan"
+    )
+
+
+class Admission(Base, UUIDPrimaryKeyMixin, TimestampMixin):
+    """Formal admission application tracking student progress from enquiry to enrollment."""
+    __tablename__ = "admissions"
+
+    enquiry_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+        ForeignKey("enquiries.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    student_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+        ForeignKey("students.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    student_name: Mapped[str] = mapped_column(String(150), nullable=False, index=True)
+    student_email: Mapped[str] = mapped_column(String(255), nullable=False, index=True)
+    student_phone: Mapped[Optional[str]] = mapped_column(String(30), nullable=True)
+    course_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+        ForeignKey("courses.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    course_title: Mapped[str] = mapped_column(String(255), nullable=False)
+    batch_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+        ForeignKey("batches.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    assigned_counselor_email: Mapped[str] = mapped_column(String(255), nullable=False, index=True)
+    stage: Mapped[str] = mapped_column(String(50), default="Application Started", nullable=False, index=True)
+    application_date: Mapped[date] = mapped_column(Date, default=date.today, nullable=False)
+    documents_required: Mapped[Optional[list]] = mapped_column(JSON, nullable=True)
+    pending_requirements: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    last_activity: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    next_action: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    follow_up_due_date: Mapped[Optional[date]] = mapped_column(Date, nullable=True, index=True)
+    approval_request_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+        ForeignKey("approval_requests.id", ondelete="SET NULL"), nullable=True
+    )
+    admin_notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+
+    # Relationships
+    course: Mapped[Optional["Course"]] = relationship("Course")
+    batch: Mapped[Optional["Batch"]] = relationship("Batch")
+    student: Mapped[Optional["Student"]] = relationship("Student")
+    approval_request: Mapped[Optional["ApprovalRequest"]] = relationship("ApprovalRequest")
+    follow_ups: Mapped[List["CounselorTask"]] = relationship(
+        "CounselorTask", back_populates="admission", cascade="all, delete-orphan"
+    )
+    interactions: Mapped[List["InteractionLog"]] = relationship(
+        "InteractionLog", back_populates="admission", cascade="all, delete-orphan"
+    )
+
+
+class CounselorTask(Base, UUIDPrimaryKeyMixin, TimestampMixin):
+    """Follow-up action item or reminder assigned to a counselor."""
+    __tablename__ = "counselor_tasks"
+
+    enquiry_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+        ForeignKey("enquiries.id", ondelete="CASCADE"), nullable=True, index=True
+    )
+    student_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+        ForeignKey("students.id", ondelete="CASCADE"), nullable=True, index=True
+    )
+    admission_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+        ForeignKey("admissions.id", ondelete="CASCADE"), nullable=True, index=True
+    )
+    assigned_counselor_email: Mapped[str] = mapped_column(String(255), nullable=False, index=True)
+    title: Mapped[str] = mapped_column(String(255), nullable=False)
+    description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    due_datetime: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, index=True)
+    priority: Mapped[str] = mapped_column(String(20), default="Medium", nullable=False, index=True)
+    status: Mapped[str] = mapped_column(String(20), default="Pending", nullable=False, index=True)
+    completed_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    rescheduled_from_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+        ForeignKey("counselor_tasks.id", ondelete="SET NULL"), nullable=True
+    )
+
+    # Relationships
+    enquiry: Mapped[Optional["Enquiry"]] = relationship("Enquiry", back_populates="follow_ups")
+    admission: Mapped[Optional["Admission"]] = relationship("Admission", back_populates="follow_ups")
+    student: Mapped[Optional["Student"]] = relationship("Student")
+
+
+class InteractionLog(Base, UUIDPrimaryKeyMixin, TimestampMixin):
+    """Audit log of communications, calls, emails, and meetings with prospects and students."""
+    __tablename__ = "interaction_logs"
+
+    enquiry_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+        ForeignKey("enquiries.id", ondelete="CASCADE"), nullable=True, index=True
+    )
+    student_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+        ForeignKey("students.id", ondelete="CASCADE"), nullable=True, index=True
+    )
+    admission_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+        ForeignKey("admissions.id", ondelete="CASCADE"), nullable=True, index=True
+    )
+    counselor_email: Mapped[str] = mapped_column(String(255), nullable=False, index=True)
+    interaction_type: Mapped[str] = mapped_column(String(50), default="Call", nullable=False)
+    summary: Mapped[str] = mapped_column(String(255), nullable=False)
+    details: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+
+    # Relationships
+    enquiry: Mapped[Optional["Enquiry"]] = relationship("Enquiry", back_populates="interactions")
+    admission: Mapped[Optional["Admission"]] = relationship("Admission", back_populates="interactions")
+    student: Mapped[Optional["Student"]] = relationship("Student")
 

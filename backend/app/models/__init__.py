@@ -12,6 +12,12 @@ from app.models.institute import (
     Student,
     StudentStatus,
     Trainer,
+    StaffMember,
+    ApprovalRequest,
+    Enquiry,
+    Admission,
+    CounselorTask,
+    InteractionLog,
 )
 from app.models.rag import (
     DocumentChunk,
@@ -31,6 +37,12 @@ __all__ = [
     "AttendanceStatus",
     "FeeInstallment",
     "FeeStatus",
+    "StaffMember",
+    "ApprovalRequest",
+    "Enquiry",
+    "Admission",
+    "CounselorTask",
+    "InteractionLog",
     "KnowledgeDocument",
     "DocumentChunk",
 ]

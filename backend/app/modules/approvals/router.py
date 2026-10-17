@@ -164,6 +164,19 @@ async def approve_request(
     approval.reviewed_at = datetime.now(timezone.utc)
     approval.rejection_reason = None
 
+    # Synchronize linked Admission record if applicable
+    if approval.request_type == "Admission Approval" and approval.payload and "admission_id" in approval.payload:
+        try:
+            from app.models.institute import Admission
+            adm_id = uuid.UUID(approval.payload["admission_id"])
+            adm = await db.get(Admission, adm_id)
+            if adm:
+                adm.stage = "Admission Approved"
+                adm.last_activity = f"Admission approved by Administrator ({reviewer_email})"
+                adm.next_action = "Proceed with student enrollment and batch allocation"
+        except Exception:
+            pass
+
     await db.commit()
     await db.refresh(approval)
     return approval
@@ -203,6 +216,19 @@ async def reject_request(
     approval.reviewed_by = reviewer_email
     approval.reviewed_at = datetime.now(timezone.utc)
     approval.rejection_reason = action.reason if action and action.reason else "Request rejected by administrator."
+
+    # Synchronize linked Admission record if applicable
+    if approval.request_type == "Admission Approval" and approval.payload and "admission_id" in approval.payload:
+        try:
+            from app.models.institute import Admission
+            adm_id = uuid.UUID(approval.payload["admission_id"])
+            adm = await db.get(Admission, adm_id)
+            if adm:
+                adm.stage = "Rejected"
+                adm.last_activity = f"Rejected by Administrator: {approval.rejection_reason}"
+                adm.next_action = "Review rejection feedback with candidate"
+        except Exception:
+            pass
 
     await db.commit()
     await db.refresh(approval)
