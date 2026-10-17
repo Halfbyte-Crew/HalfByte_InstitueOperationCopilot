@@ -99,6 +99,9 @@ class Student(Base, UUIDPrimaryKeyMixin, TimestampMixin):
     fee_installments: Mapped[List["FeeInstallment"]] = relationship(
         "FeeInstallment", back_populates="student", cascade="all, delete-orphan"
     )
+    payment_transactions: Mapped[List["PaymentTransaction"]] = relationship(
+        "PaymentTransaction", back_populates="student", cascade="all, delete-orphan"
+    )
 
 
 class Trainer(Base, UUIDPrimaryKeyMixin, TimestampMixin):
@@ -250,6 +253,40 @@ class FeeInstallment(Base, UUIDPrimaryKeyMixin, TimestampMixin):
     # Relationships
     student: Mapped["Student"] = relationship("Student", back_populates="fee_installments")
     batch: Mapped[Optional["Batch"]] = relationship("Batch", back_populates="fee_installments")
+    payments: Mapped[List["PaymentTransaction"]] = relationship(
+        "PaymentTransaction", back_populates="installment", cascade="all, delete-orphan"
+    )
+
+
+class PaymentTransaction(Base, UUIDPrimaryKeyMixin, TimestampMixin):
+    """Immutable financial ledger of payments recorded against student fee installments."""
+    __tablename__ = "payment_transactions"
+    __table_args__ = (
+        CheckConstraint("amount > 0", name="chk_payment_amount_positive"),
+    )
+
+    installment_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+        ForeignKey("fee_installments.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    student_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("students.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    amount: Mapped[Decimal] = mapped_column(Numeric(12, 2), nullable=False)
+    payment_date: Mapped[date] = mapped_column(Date, default=date.today, nullable=False, index=True)
+    payment_method: Mapped[str] = mapped_column(String(50), default="UPI", nullable=False, index=True)  # UPI, Bank Transfer, Cash, Card
+    transaction_reference: Mapped[str] = mapped_column(String(100), unique=True, nullable=False, index=True)
+    receipt_number: Mapped[str] = mapped_column(String(100), unique=True, nullable=False, index=True)
+    payment_status: Mapped[str] = mapped_column(String(50), default="Successful", nullable=False, index=True)  # Successful, Pending Verification, Failed
+    reconciliation_status: Mapped[str] = mapped_column(String(50), default="Unreconciled", nullable=False, index=True)  # Unreconciled, Reconciled, Discrepancy
+    reconciled_by: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    reconciled_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    discrepancy_reason: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    recorded_by: Mapped[str] = mapped_column(String(255), nullable=False)
+    notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+
+    # Relationships
+    student: Mapped["Student"] = relationship("Student", back_populates="payment_transactions")
+    installment: Mapped[Optional["FeeInstallment"]] = relationship("FeeInstallment", back_populates="payments")
 
 
 class ClassSchedule(Base, UUIDPrimaryKeyMixin, TimestampMixin):

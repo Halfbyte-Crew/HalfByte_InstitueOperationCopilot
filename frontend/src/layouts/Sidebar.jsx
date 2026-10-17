@@ -16,6 +16,9 @@ import {
   LogOut,
   User,
   X,
+  Receipt,
+  CheckCircle,
+  FileText,
 } from 'lucide-react';
 import { getNavItems } from '../utils/rbac';
 import { useAuth } from '../app/providers';
@@ -32,6 +35,9 @@ const ICON_MAP = {
   Bot,
   CheckSquare,
   ShieldCheck,
+  Receipt,
+  CheckCircle,
+  FileText,
 };
 
 /** Role label displayed in the sidebar header. */
