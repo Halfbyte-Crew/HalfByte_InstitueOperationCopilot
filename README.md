@@ -241,13 +241,8 @@ Frontend Web Client will be accessible at: `http://localhost:5173`
 
 ## Authentication & Credentials
 
-### 1. Administrator Root Account
-The Administrator account is configured via `backend/.env` with guaranteed fallback:
-- **Email**: `admin@edupilot.io` (or configured `ADMIN_EMAIL`)
-- **Password**: `admin123` (or configured `ADMIN_PASSWORD`)
-- **Role**: `super_admin` → Routes to `/dashboard/owner`
 
-### 2. Staff Accounts (Created via Admin Dashboard)
+### 1. Staff Accounts (Created via Admin Dashboard)
 Administrators create Counselor, Trainer, and Finance accounts in **Staff Management** (`/dashboard/owner` → Staff). Initial passwords can be set during creation or reset anytime via the UI.
 
 ---
