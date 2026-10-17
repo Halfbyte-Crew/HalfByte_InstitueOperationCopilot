@@ -6,6 +6,7 @@ from pydantic import BaseModel, ConfigDict, EmailStr, Field
 from app.models.institute import (
     AttendanceStatus,
     BatchStatus,
+    ClassScheduleStatus,
     EnrollmentStatus,
     FeeStatus,
     StudentStatus,
@@ -261,3 +262,149 @@ class FeeOverviewResponse(BaseModel):
     total_collected: Decimal
     total_outstanding: Decimal
     collection_rate: str
+
+
+# ---------------------------------------------------------
+# Class Schedule Schemas
+# ---------------------------------------------------------
+
+class ClassScheduleBase(BaseModel):
+    batch_id: uuid.UUID
+    trainer_id: Optional[uuid.UUID] = None
+    title: str = Field(..., min_length=2, max_length=200)
+    scheduled_date: date
+    start_time: str = Field(..., pattern=r"^\d{2}:\d{2}$")
+    end_time: str = Field(..., pattern=r"^\d{2}:\d{2}$")
+    classroom: Optional[str] = Field(None, max_length=100)
+    meeting_link: Optional[str] = Field(None, max_length=255)
+    status: ClassScheduleStatus = ClassScheduleStatus.SCHEDULED
+
+
+class ClassScheduleCreate(ClassScheduleBase):
+    pass
+
+
+class ClassScheduleUpdate(BaseModel):
+    trainer_id: Optional[uuid.UUID] = None
+    title: Optional[str] = Field(None, min_length=2, max_length=200)
+    scheduled_date: Optional[date] = None
+    start_time: Optional[str] = Field(None, pattern=r"^\d{2}:\d{2}$")
+    end_time: Optional[str] = Field(None, pattern=r"^\d{2}:\d{2}$")
+    classroom: Optional[str] = None
+    meeting_link: Optional[str] = None
+    status: Optional[ClassScheduleStatus] = None
+
+
+class ClassScheduleResponse(ClassScheduleBase, BaseSchema):
+    id: uuid.UUID
+    created_at: datetime
+    updated_at: datetime
+    batch_code: Optional[str] = None
+    course_title: Optional[str] = None
+    trainer_name: Optional[str] = None
+
+
+# ---------------------------------------------------------
+# Staff Member Schemas
+# ---------------------------------------------------------
+
+class StaffMemberBase(BaseModel):
+    name: str = Field(..., min_length=2, max_length=150)
+    email: EmailStr
+    phone: Optional[str] = Field(None, max_length=50)
+    role: str = Field(..., min_length=2, max_length=50)
+    department: Optional[str] = Field(None, max_length=100)
+    is_active: bool = True
+
+
+class StaffMemberCreate(StaffMemberBase):
+    pass
+
+
+class StaffMemberUpdate(BaseModel):
+    name: Optional[str] = Field(None, min_length=2, max_length=150)
+    phone: Optional[str] = Field(None, max_length=50)
+    role: Optional[str] = Field(None, min_length=2, max_length=50)
+    department: Optional[str] = Field(None, max_length=100)
+    is_active: Optional[bool] = None
+
+
+class StaffMemberResponse(StaffMemberBase, BaseSchema):
+    id: uuid.UUID
+    created_at: datetime
+    updated_at: datetime
+
+
+# ---------------------------------------------------------
+# Approval Request Schemas
+# ---------------------------------------------------------
+
+class ApprovalRequestBase(BaseModel):
+    request_type: str = Field(..., min_length=2, max_length=100)
+    title: str = Field(..., min_length=3, max_length=255)
+    description: str
+    requester_name: str = Field(..., min_length=2, max_length=150)
+    requester_email: EmailStr
+    requester_role: str = Field(..., min_length=2, max_length=50)
+    payload: Optional[dict] = None
+
+
+class ApprovalRequestCreate(ApprovalRequestBase):
+    pass
+
+
+class ApprovalActionRequest(BaseModel):
+    reason: Optional[str] = None
+
+
+class ApprovalRequestResponse(ApprovalRequestBase, BaseSchema):
+    id: uuid.UUID
+    status: str
+    rejection_reason: Optional[str] = None
+    reviewed_by: Optional[str] = None
+    reviewed_at: Optional[datetime] = None
+    created_at: datetime
+    updated_at: datetime
+
+
+# ---------------------------------------------------------
+# Admin Dashboard Composite Schemas
+# ---------------------------------------------------------
+
+class AdminOverviewResponse(BaseModel):
+    total_students: int
+    total_batches: int
+    total_trainers: int
+    upcoming_classes: int
+    pending_approvals_count: int
+    active_conflicts_count: int
+    operational_alerts_count: int
+    institute_name: str
+    current_term: str
+
+
+class ConflictDetail(BaseModel):
+    conflict_id: str
+    conflict_type: str  # "TRAINER_OVERLAP" | "ROOM_DOUBLE_BOOKING"
+    severity: str      # "HIGH" | "CRITICAL"
+    title: str
+    description: str
+    scheduled_date: str
+    overlapping_time: str
+    affected_entity: str
+    affected_sessions: List[dict]
+    resolution_hint: str
+
+
+class OperationalAlert(BaseModel):
+    id: str
+    severity: str      # "CRITICAL" | "HIGH" | "MEDIUM" | "INFO"
+    title: str
+    explanation: str
+    relevant_date: Optional[str] = None
+    affected_entity: Optional[str] = None
+    action_label: str
+    action_link: str
+    is_ai_generated: bool = False
+    is_acknowledged: bool = False
+

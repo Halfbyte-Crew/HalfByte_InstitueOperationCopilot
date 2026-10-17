@@ -15,7 +15,14 @@ export const copilotApi = {
     });
   },
 
-  getSuggestions: async () => {
-    return apiClient('/copilot/suggestions');
+  queryKnowledgeBase: async (question, topK = 4, category = null) => {
+    return apiClient('/copilot/rag/query', {
+      method: 'POST',
+      body: { question, top_k: topK, category },
+    });
+  },
+
+  listDocuments: async () => {
+    return apiClient('/copilot/rag/documents');
   },
 };

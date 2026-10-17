@@ -10,11 +10,20 @@ class Settings(BaseSettings):
     SECRET_KEY: str = "default_secret_key_change_in_production"
     ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 60
+    INSTITUTE_TIMEZONE: str = "Asia/Kolkata"
 
     DATABASE_URL: str = "postgresql+asyncpg://edupilot_user:edupilot_password@localhost:5432/edupilot"
 
     OPENAI_API_KEY: str = ""
     OPENAI_MODEL: str = "gpt-4o"
+
+    # Ollama / Local Embedding Settings
+    OLLAMA_BASE_URL: str = "http://localhost:11434"
+    OLLAMA_EMBEDDING_MODEL: str = "qwen3-embedding:4b"
+
+    # RAG Retrieval Settings
+    RAG_SIMILARITY_THRESHOLD: float = 0.40
+    RAG_TOP_K: int = 4
 
     BACKEND_CORS_ORIGINS: List[str] = [
         "http://localhost:5173",

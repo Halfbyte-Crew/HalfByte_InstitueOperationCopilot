@@ -9,10 +9,21 @@ from app.modules.fees.router import router as fees_router
 from app.modules.copilot.router import router as copilot_router
 from app.modules.approvals.router import router as approvals_router
 from app.modules.audit.router import router as audit_router
+from app.modules.dashboard.router import router as dashboard_router
+from app.modules.rag.router import router as rag_router
+from app.modules.staff.router import router as staff_router
+from app.modules.counselor.router import router as counselor_router
+from app.modules.finance.router import router as finance_router
+from app.modules.trainer.router import router as trainer_router
 
 api_router = APIRouter()
 
 api_router.include_router(auth_router)
+api_router.include_router(dashboard_router)
+api_router.include_router(counselor_router)
+api_router.include_router(finance_router)
+api_router.include_router(trainer_router)
+api_router.include_router(staff_router)
 api_router.include_router(students_router)
 api_router.include_router(courses_router)
 api_router.include_router(batches_router)
@@ -20,5 +31,6 @@ api_router.include_router(trainers_router)
 api_router.include_router(attendance_router)
 api_router.include_router(fees_router)
 api_router.include_router(copilot_router)
+api_router.include_router(rag_router)
 api_router.include_router(approvals_router)
 api_router.include_router(audit_router)
