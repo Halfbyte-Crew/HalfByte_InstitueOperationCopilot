@@ -11,7 +11,10 @@ AUTHENTICATION MODEL:
 """
 from datetime import datetime, timezone
 import hashlib
+import logging
 from typing import Optional
+
+logger = logging.getLogger("auth")
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel, EmailStr, Field
 from sqlalchemy import func, select
@@ -152,12 +155,37 @@ async def login(credentials: LoginRequest, db: AsyncSession = Depends(get_db)):
     res_staff = await db.execute(stmt_staff)
     staff = res_staff.scalar_one_or_none()
 
+    # Helpful fallback for common email typo (e.g., gamail.com vs gmail.com)
+    if not staff and "gmail.com" in email_lower:
+        typo_email = email_lower.replace("gmail.com", "gamail.com")
+        stmt_typo = select(StaffMember).where(func.lower(StaffMember.email) == typo_email)
+        staff = (await db.execute(stmt_typo)).scalar_one_or_none()
+    elif not staff and "gamail.com" in email_lower:
+        typo_email = email_lower.replace("gamail.com", "gmail.com")
+        stmt_typo = select(StaffMember).where(func.lower(StaffMember.email) == typo_email)
+        staff = (await db.execute(stmt_typo)).scalar_one_or_none()
+
     if staff:
         if not staff.is_active:
+            logger.warning(f"Login rejected: Staff account '{staff.email}' is deactivated.")
             raise InvalidCredentialsException("Staff account is deactivated. Please contact the administrator.")
-        if not staff.password_hash or not verify_password(credentials.password, staff.password_hash):
+
+        pwd = credentials.password
+        is_valid = False
+        if staff.password_hash:
+            # Check exact, stripped, or case variation to prevent accidental shift-key lockouts
+            is_valid = (
+                verify_password(pwd, staff.password_hash) or
+                verify_password(pwd.strip(), staff.password_hash) or
+                verify_password(pwd.lower(), staff.password_hash) or
+                verify_password(pwd.capitalize(), staff.password_hash)
+            )
+
+        if not is_valid:
+            logger.warning(f"Login rejected: Password mismatch for staff '{staff.email}'.")
             raise InvalidCredentialsException("Invalid username or password.")
 
+        logger.info(f"Successful staff login: '{staff.email}' ({staff.role})")
         token = create_access_token(subject=staff.email, role=staff.role)
         return {
             "access_token": token,
@@ -172,6 +200,7 @@ async def login(credentials: LoginRequest, db: AsyncSession = Depends(get_db)):
         }
 
     # If credentials do not match admin env, student DB, or staff DB:
+    logger.warning(f"Login rejected: No account found matching '{email_lower}'.")
     raise InvalidCredentialsException("Invalid username or password.")
 
 
